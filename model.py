@@ -22,6 +22,11 @@ class RestCase:
     capability: str = ""
     selection: str = "diagnostic_variant"
     native: bool = True
+    rest_contract: str = ""
+    expected_symbol: str = ""
+    expected_logical_success: bool = True
+    core_anchor: str = ""
+    parser_anchor: str = ""
 
 
 @dataclass(frozen=True)

@@ -12,12 +12,50 @@ sys.path.insert(0, str(TOOL_ROOT))
 import catalog_audit  # noqa: E402
 from model import WsCase  # noqa: E402
 from redaction import public_frame, wire_shape  # noqa: E402
+from rest_contracts import validate as validate_rest_contract  # noqa: E402
 import sandbox  # noqa: E402
 from venues import PRODUCTS, _kucoin_ack, _kucoin_data, _kucoin_welcome  # noqa: E402
 from ws_client import _application_pong, _matches_data  # noqa: E402
 
 
 class ProbeContractTests(unittest.TestCase):
+    def test_reference_contracts_reject_http_200_logical_errors(self) -> None:
+        ok, evidence = validate_rest_contract(
+            "bitget_ticker24h", {"code": "40017", "msg": "invalid symbol"}, "BTCUSDT")
+        self.assertFalse(ok)
+        self.assertEqual("logical_error_or_empty_rows", evidence["error"])
+
+    def test_reference_contracts_record_native_units(self) -> None:
+        ok, evidence = validate_rest_contract(
+            "bybit_ticker24h",
+            {"retCode": 0, "result": {"list": [{"symbol": "BTCUSDT",
+              "turnover24h": "10", "price24hPcnt": "0.0125"}]}}, "BTCUSDT")
+        self.assertTrue(ok)
+        self.assertEqual("turnover24h:quote", evidence["volume"])
+        self.assertEqual("price24hPcnt:ratio", evidence["change_or_funding"])
+
+    def test_binance_style_rest_is_uppercase_while_ws_stream_is_lowercase(self) -> None:
+        for venue in ("binance", "aster"):
+            product = next(item for item in PRODUCTS
+                           if item.venue == venue and item.product == "futures")
+            lowercase = next(case for case in product.public_rest
+                             if case.name == "funding_lowercase")
+            self.assertFalse(lowercase.expected_logical_success)
+            funding_ws = next(case for case in product.public_ws
+                              if case.name == "funding")
+            self.assertIn(b"btcusdt", funding_ws.subscribe or funding_ws.path.encode())
+
+    def test_kucoin_duplicate_funding_intervals_must_agree(self) -> None:
+        base = {"symbol": "XBTUSDTM", "fundingFeeRate": "0.0001",
+                "nextFundingRateDateTime": 1,
+                "currentFundingRateGranularity": 28800000,
+                "fundingRateGranularity": 28800000}
+        self.assertTrue(validate_rest_contract(
+            "kucoin_funding", {"code": "200000", "data": [base]}, "XBTUSDTM")[0])
+        self.assertFalse(validate_rest_contract(
+            "kucoin_funding", {"code": "200000", "data": [base | {
+                "fundingRateGranularity": 14400000}]}, "XBTUSDTM")[0])
+
     def test_kucoin_profiles_require_binary_lifecycle(self) -> None:
         cases = [case for product in PRODUCTS if product.venue == "kucoin"
                  for case in product.public_ws]

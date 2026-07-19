@@ -35,7 +35,7 @@ def main() -> int:
     parser.add_argument("--venue", action="append")
     parser.add_argument("--product", action="append", choices=("spot", "futures"))
     parser.add_argument("--case", action="append",
-                        help="limit WebSocket/FIX observation to a named case")
+                        help="limit REST/WebSocket/FIX observation to a named case")
     parser.add_argument("--mode", choices=("public", "private", "all"), default="public")
     parser.add_argument("--transport", choices=("rest", "ws", "fix", "all"), default="rest")
     parser.add_argument("--timeout", type=float, default=10.0)
@@ -102,6 +102,8 @@ def main() -> int:
             emit(base | {"kind": "note", "detail": note})
         if args.transport in ("rest", "all") and args.mode in ("public", "all"):
             for case in product.public_rest:
+                if args.case and case.name not in args.case:
+                    continue
                 record = probe.public_rest(product, case, args.timeout)
                 failures += not bool(record["ok"])
                 emit(record)

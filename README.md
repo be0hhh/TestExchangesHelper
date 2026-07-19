@@ -33,6 +33,13 @@ Public REST example:
 python3 run.py --mode public --transport rest
 ```
 
+Reference-data profiles additionally validate the venue's logical success
+code, native symbol spelling/case, required 24h volume/change or funding
+fields, and the native units used by each exchange.  Intentional lowercase
+symbol probes record both `logical_success` and `contract_match`, so a required
+rejection is distinguishable from a network failure.  Use `--case ticker_24h`,
+`--case funding_current`, or `--case funding_lowercase` for a narrow check.
+
 Credentialed read-only REST across every configured canonical API slot:
 
 ```bash

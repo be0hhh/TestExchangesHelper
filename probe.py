@@ -11,25 +11,38 @@ try:  # Supports both `python run.py` and `import exchange_api_probe`.
     from .http_client import execute
     from .model import Credentials, ProductSpec, RestCase, WsCase
     from .redaction import shape, wire_shape
+    from .rest_contracts import validate as validate_rest_contract
     from .ws_client import observe
 except ImportError:  # pragma: no cover - direct script mode
     from capability_matrix import capability_for_case
     from http_client import execute
     from model import Credentials, ProductSpec, RestCase, WsCase
     from redaction import shape, wire_shape
+    from rest_contracts import validate as validate_rest_contract
     from ws_client import observe
 
 
 def public_rest(product: ProductSpec, case: RestCase, timeout: float) -> dict:
     result = execute(case, timeout)
-    ok = 200 <= result.status < 300 and not result.error
+    response_received = result.status > 0 and result.error in ("", "http_error")
+    transport_success = 200 <= result.status < 300 and not result.error
+    logical_success, semantics = validate_rest_contract(
+        case.rest_contract, result.json_value, case.expected_symbol)
+    if not case.rest_contract:
+        logical_success = transport_success
+    contract_match = logical_success == case.expected_logical_success
+    ok = response_received and contract_match
     return {
         "kind": "public_rest", "venue": product.venue, "product": product.product,
         "case": case.name, "capability": capability_for_case(case), "transport": "rest",
         "wire": "json", "selection": case.selection, "ok": int(ok),
         "status": result.status, "elapsed_ms": result.elapsed_ms,
         "body_bytes": result.body_bytes, "error": result.error,
+        "logical_success": int(logical_success),
+        "expected_logical_success": int(case.expected_logical_success),
+        "contract_match": int(contract_match), "semantics": semantics,
         "shape": shape(result.json_value), "orders_sent": 0, "secrets_printed": 0,
+        "core_anchor": case.core_anchor, "parser_anchor": case.parser_anchor,
     }
 
 
