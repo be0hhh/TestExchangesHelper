@@ -1,109 +1,147 @@
-# TestExchangesHelper
+# exchange-api-probe
 
-Bounded diagnostic for the cold exchange-data contract. It validates TLS
-hostnames, caps each HTTP/WS response, never sends orders, and prints only
-schema/count evidence. Account values, credentials, signatures, JWTs and wallet
-identities are never printed.
+Standalone Linux C++20 diagnostic for CXETCPP exchange API profiles. It does
+not link CXETCPP or reuse its connectors: source anchors and network
+observations remain separate evidence.
 
-Each matrix row is a precise `venue/product/capability/wire` contract. It is
-either profiled, not profiled, credential-missing, or a real
-transport/data/schema result. It never promotes an adjacent endpoint into a
-capability it does not provide.
+The probe covers 28 spot/futures products:
 
-Requested public classes are exchange info, instrument catalogue/detail,
-current funding all/by-symbol, funding history, historical trades, live trades,
-BBO and L2. Private classes are balances, positions, open orders, order history,
-fill history, and account/orders/trades streams. Spot funding rows are omitted;
-unsupported venue methods remain explicit matrix rows.
+- public HTTPS and WebSocket observations;
+- read-only private HTTPS for six implemented HMAC families;
+- capability matrix and optional CXETCPP source-anchor audit;
+- bounded public-only sandbox profiles;
+- JSON, binary JSON, protobuf, SBE and FIX/SBE declarations.
 
-## Matrix first
+Success is fail-closed. TCP/TLS/HTTP alone is not an exchange-contract proof.
+Exact REST contracts validate the native logical envelope, symbol and fields.
+Negative-symbol cases pass only on explicitly allowed statuses or exchange
+codes. WebSocket profiles validate acknowledgement and/or matching data.
 
-```bash
-python3 run.py --capability-matrix
-python3 run.py --catalog-audit
-```
+## Dependencies and build
 
-Both commands are static-only and do not use the network or credentials. The
-matrix marks `core_selected` versus `diagnostic_variant` separately, so JSON,
-SBE, FIX/SBE and gRPC/protobuf claims cannot be conflated.
-
-Public REST example:
+Ubuntu 24.04:
 
 ```bash
-python3 run.py --mode public --transport rest
+sudo apt update
+sudo apt install build-essential cmake libboost-all-dev libssl-dev
+cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
-Reference-data profiles additionally validate the venue's logical success
-code, native symbol spelling/case, required 24h volume/change or funding
-fields, and the native units used by each exchange.  Intentional lowercase
-symbol probes record both `logical_success` and `contract_match`, so a required
-rejection is distinguishable from a network failure.  Use `--case ticker_24h`,
-`--case funding_current`, or `--case funding_lowercase` for a narrow check.
+There is no Ninja, vcpkg, Conan, FetchContent, vendored library, Python or
+system-zlib dependency. HTTPS/WSS uses Boost.Asio/Beast, JSON uses Boost.JSON,
+and TLS/HMAC use OpenSSL. HTX/BingX gzip uses Beast's header-only deflate and
+Boost.CRC.
 
-Credentialed read-only REST across every configured canonical API slot:
+The implementation is split into independently compiled owners:
+
+- `cli.cpp` parses arguments; `application.cpp` orchestrates commands;
+- `probe_runner.cpp` classifies REST/WS observations;
+- `http_client.cpp`, `ws_client.cpp`, and `net_common.cpp` own transport stages;
+- `contracts.cpp`, `gzip.cpp`, and `redaction.cpp` own payload validation;
+- profile factories, major venues, extended venues, and miscellaneous venues
+  are separate profile units;
+- CTest has independent CLI, REST, WS/protobuf, redaction, and gzip binaries.
+
+## Commands
+
+Tables are the default. `--jsonl` selects schema version 2 machine output.
 
 ```bash
-python3 run.py --mode private --transport rest \
-  --confirm-read-only-private --env-file .env
+./build/exchange-api-probe matrix
+./build/exchange-api-probe matrix --venue binance --product futures --jsonl
+
+./build/exchange-api-probe audit \
+  --source-root /path/to/CXETCPP --jsonl
+
+./build/exchange-api-probe run \
+  --venue okx --product futures \
+  --surface public --transport rest
+
+./build/exchange-api-probe run \
+  --venue mexc --product spot \
+  --surface public --transport ws \
+  --timeout-ms 15000 --attempts 2
 ```
 
-The same credentials can be sourced from a local INI profile. The tool reads
-only `env_path`, loads values into its own process and never prints their names
-or values:
+`--venue`, `--product`, and `--case` are repeatable. Empty selections are
+configuration errors. `--raw-public` adds at most 4096 public payload bytes.
+
+### Proxy
+
+`HTTPS_PROXY`/`https_proxy` and `NO_PROXY`/`no_proxy` apply to HTTPS and WSS.
+Only HTTP CONNECT proxies are supported. An invalid or unavailable configured
+proxy fails explicitly; there is no silent direct fallback.
+
+### Read-only private REST
+
+Private probing is explicit:
 
 ```bash
-python3 run.py --mode private --transport rest \
-  --confirm-read-only-private --profile-config local-profile.ini
+./build/exchange-api-probe run \
+  --venue binance --product spot \
+  --surface private --transport rest \
+  --confirm-private --env-file ./credentials.env
 ```
 
-Public WebSocket `welcome -> subscribe -> correlated ACK -> data` contract,
-including an optional raw public frame:
+Public commands never load credential variables or env files. Private profiles
+contain GET-only account, balance, open-order and position probes. There is no
+order mutation route. Credentials are non-copyable and cleansed on destruction;
+output contains shapes, not private values.
+
+Variables use a product prefix and optional numeric slot:
+
+```text
+BINANCE_SPOT_API_KEY=...
+BINANCE_SPOT_API_SECRET=...
+
+BINANCE_SPOT_API_2_KEY=...
+BINANCE_SPOT_API_2_SECRET=...
+```
+
+Some families additionally use `_PASSPHRASE` or `_ACCOUNT_ID`.
+
+### Sandbox
+
+Sandbox input is public-only, bounded to 1 MiB, and rejects private,
+credential, header and auth fields:
+
+```json
+{
+  "venue": "example",
+  "product": "spot",
+  "public_rest": [
+    {
+      "name": "time",
+      "host": "api.example.com",
+      "path": "/v1/time",
+      "capabilities": ["server_time"]
+    }
+  ],
+  "public_ws": [
+    {
+      "name": "trades",
+      "host": "stream.example.com",
+      "path": "/ws",
+      "subscribe": "{\"op\":\"subscribe\",\"topic\":\"trades\"}",
+      "capabilities": ["live_trades"]
+    }
+  ]
+}
+```
 
 ```bash
-python3 run.py --mode public --transport ws --raw-public
+./build/exchange-api-probe sandbox --file profile.json --transport ws
 ```
 
-Use at most three bounded attempts when a public stream is sparse or a cold
-edge closes a connection. The output records both `attempts_allowed` and
-`attempts_used`; a retry never erases the final wire/schema evidence.
+Sandbox results are diagnostic variants; they do not claim CXETCPP
+registration or live readiness.
 
-```bash
-python3 run.py --mode public --transport ws --attempts 3
-```
+## Evidence boundary
 
-## Wires and reusable API
-
-This tool is pure Python and has no C++ target or core helper. JSON REST, JSON
-WebSocket and binary WebSocket/SBE profiles are observed directly. A FIX/SBE
-row is retained as source-backed metadata but reports
-`external_adapter_required`: Python does not pretend to reproduce an exchange
-FIX signer/session safely. Finam is not a profile of this tool.
-
-The CLI is a thin view over importable functions when the repository parent is
-on `PYTHONPATH`:
-
-```python
-from exchange_api_probe import public_rest, public_ws
-```
-
-They return redacted dictionaries with status, timing, shape and wire evidence;
-they never place orders or return credentials.
-
-The REST client follows the standard-library HTTPS proxy configuration. The
-minimal public WebSocket observer connects directly and therefore does not
-support HTTP CONNECT proxies.
-
-Private REST is read-only and requires `--confirm-read-only-private`. Every
-configured credential slot is attempted independently. A missing private
-transport profile is reported as unsupported/missing, never silently
-approximated by a public subscription.
-
-`--catalog-audit` validates the profile catalog without a source checkout. Pass
-`--source-root /path/to/source` only when a companion source tree is available
-for cross-checking implementation references. It is not build, runtime or live
-evidence. `--sandbox-file candidate.json` runs a public-only candidate profile
-for investigating a new venue. Sandbox files cannot define credentials or
-private calls.
-
-This tool is diagnostic, not a benchmark or trading-readiness proof. A
-successful probe proves only the named route, wire and API slot.
+- `matrix` describes compiled probe profiles only.
+- `audit` is static source evidence only.
+- `run` is a point-in-time external network observation only.
+- None proves hft-trader readiness, production runtime selection, end-to-end
+  parser delivery, account permissions, or safe live order capability.
