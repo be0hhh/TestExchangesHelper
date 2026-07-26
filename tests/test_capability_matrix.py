@@ -99,11 +99,9 @@ class CapabilityMatrixContractTests(unittest.TestCase):
     def test_finam_families_are_excluded_from_the_python_probe(self) -> None:
         venues = {product.venue for product in PRODUCTS}
         self.assertNotIn("finam", venues)
-        self.assertNotIn("finam_arena", venues)
 
         result = catalog_audit.audit(PRODUCTS)
         self.assertIn("finam", result["excluded_families"])
-        self.assertIn("finam_arena", result["excluded_families"])
 
 
 if __name__ == "__main__":

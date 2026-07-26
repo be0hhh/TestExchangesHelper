@@ -9,7 +9,7 @@ from model import ProductSpec
 
 
 DEFAULT_SOURCE_ROOT = Path(__file__).resolve().parents[2]
-EXCLUDED_FAMILIES = ("finam", "finam_arena")
+EXCLUDED_FAMILIES = ("finam",)
 
 
 def registered_families(source_root: Path | None) -> tuple[str, ...]:

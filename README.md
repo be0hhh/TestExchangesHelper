@@ -77,7 +77,7 @@ This tool is pure Python and has no C++ target or core helper. JSON REST, JSON
 WebSocket and binary WebSocket/SBE profiles are observed directly. A FIX/SBE
 row is retained as source-backed metadata but reports
 `external_adapter_required`: Python does not pretend to reproduce an exchange
-FIX signer/session safely. Finam and Finam Arena are not profiles of this tool.
+FIX signer/session safely. Finam is not a profile of this tool.
 
 The CLI is a thin view over importable functions when the repository parent is
 on `PYTHONPATH`:
