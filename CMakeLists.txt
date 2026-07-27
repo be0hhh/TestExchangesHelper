@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Boost 1.83 REQUIRED COMPONENTS json system)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -35,15 +34,9 @@ add_library(exchange_probe_lib
 target_include_directories(exchange_probe_lib PUBLIC include)
 target_link_libraries(exchange_probe_lib
     PUBLIC
-        Boost::json
-        Boost::system
         OpenSSL::Crypto
         OpenSSL::SSL
         Threads::Threads
-)
-target_compile_definitions(exchange_probe_lib
-    PUBLIC
-        BOOST_ASIO_NO_DEPRECATED
 )
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
