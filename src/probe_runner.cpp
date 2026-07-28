@@ -104,11 +104,16 @@ namespace {
       .http_status = result.status,
       .elapsed_ms = result.elapsed_ms,
       .payload_bytes = result.body_bytes,
+      .timings = result.timings,
+      .transport_metadata = result.transport,
       .stage = result.stage,
       .error = result.error,
       .evidence = nullptr,
       .raw_public = std::nullopt,
   };
+  if (observation.timings.total_us == 0U && result.elapsed_ms != 0U) {
+    observation.timings.total_us = result.elapsed_ms * 1000U;
+  }
   observation.transport_ok = result.status != 0 && result.tls_verified;
   observation.http_ok = result.status >= 200 && result.status < 300;
   if (!result.json_present) {
@@ -195,14 +200,18 @@ namespace {
     const ProductSpec& product,
     const RestCase& probe_case,
     const RunLimits& limits,
-    const std::optional<SignedRequest>& signed_request) {
+    const std::optional<SignedRequest>& signed_request,
+    const std::optional<std::string>& pinned_ip,
+    const std::optional<bool>& use_proxy) {
   Observation last;
   const auto attempts = std::max(1U, limits.attempts);
   for (unsigned attempt = 1; attempt <= attempts; ++attempt) {
     const auto result = execute_http(
         probe_case,
         std::chrono::steady_clock::now() + limits.timeout,
-        signed_request);
+        signed_request,
+        pinned_ip,
+        use_proxy);
     last = classify_http(product, probe_case, result, limits);
     last.attempts_allowed = attempts;
     last.attempts_used = attempt;
@@ -240,15 +249,20 @@ namespace {
 Observation run_public_rest(
     const ProductSpec& product,
     const RestCase& probe_case,
-    const RunLimits& limits) {
-  return run_http_attempts(product, probe_case, limits, std::nullopt);
+    const RunLimits& limits,
+    const std::optional<std::string>& pinned_ip,
+    const std::optional<bool>& use_proxy) {
+  return run_http_attempts(
+      product, probe_case, limits, std::nullopt, pinned_ip, use_proxy);
 }
 
 Observation run_private_rest(
     const ProductSpec& product,
     const RestCase& probe_case,
     const Credentials& credentials,
-    const RunLimits& limits) {
+    const RunLimits& limits,
+    const std::optional<std::string>& pinned_ip,
+    const std::optional<bool>& use_proxy) {
   std::string sign_error;
   const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
                        std::chrono::system_clock::now().time_since_epoch())
@@ -261,19 +275,24 @@ Observation run_private_rest(
         probe_case,
         "signing_failed:" + sign_error);
   }
-  return run_http_attempts(product, probe_case, limits, signed_request);
+  return run_http_attempts(
+      product, probe_case, limits, signed_request, pinned_ip, use_proxy);
 }
 
 Observation run_public_ws(
     const ProductSpec& product,
     const WsCase& probe_case,
-    const RunLimits& limits) {
+    const RunLimits& limits,
+    const std::optional<std::string>& pinned_ip,
+    const std::optional<bool>& use_proxy) {
   Observation last;
   const auto attempts = std::max(1U, limits.attempts);
   for (unsigned attempt = 1; attempt <= attempts; ++attempt) {
     const auto result = observe_ws(
         probe_case,
-        std::chrono::steady_clock::now() + limits.timeout);
+        std::chrono::steady_clock::now() + limits.timeout,
+        pinned_ip,
+        use_proxy);
     last = Observation{
         .kind = "observation",
         .venue = product.venue,
@@ -294,6 +313,8 @@ Observation run_public_ws(
         .payload_bytes = result.payload_bytes,
         .attempts_allowed = attempts,
         .attempts_used = attempt,
+        .timings = result.timings,
+        .transport_metadata = result.transport,
         .stage = result.protocol_stage,
         .error = result.error,
         .evidence = boost::json::object{
@@ -311,6 +332,9 @@ Observation run_public_ws(
     last.expectation_met =
         last.transport_ok && last.tls_ok &&
         last.logical_ok && last.schema_ok && last.error.empty();
+    if (last.timings.total_us == 0U && result.elapsed_ms != 0U) {
+      last.timings.total_us = result.elapsed_ms * 1000U;
+    }
     if (last.expectation_met) {
       last.outcome = Outcome::Success;
     } else if (result.protocol_stage == "decompression") {

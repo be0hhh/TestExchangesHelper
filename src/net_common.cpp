@@ -10,12 +10,19 @@
 #include <boost/json/string.hpp>
 
 #include <openssl/ssl.h>
+#include <openssl/x509.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <string>
+#include <utility>
 #include <vector>
+
+#if defined(__linux__)
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#endif
 
 namespace exchange_probe {
 namespace {
@@ -240,6 +247,16 @@ bool connect(
   return true;
 }
 
+bool connect_endpoint(
+    asio::io_context& context,
+    beast::tcp_stream& stream,
+    const tcp::endpoint& endpoint,
+    std::chrono::steady_clock::time_point deadline,
+    std::string& error) {
+  const auto endpoints = tcp::resolver::results_type::create(endpoint, {}, {});
+  return connect(context, stream, endpoints, deadline, error);
+}
+
 bool establish_proxy_tunnel(
     asio::io_context& context,
     beast::tcp_stream& stream,
@@ -363,6 +380,116 @@ std::uint64_t elapsed_ms(
       std::chrono::steady_clock::now() - start;
   return static_cast<std::uint64_t>(
       std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+}
+
+std::uint64_t elapsed_us(
+    std::chrono::steady_clock::time_point start) noexcept {
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  return static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
+}
+
+TransportMetadata transport_metadata(TlsStream& stream) noexcept {
+  TransportMetadata result;
+  try {
+    boost::system::error_code endpoint_error;
+    const auto endpoint =
+        beast::get_lowest_layer(stream).socket().remote_endpoint(endpoint_error);
+    if (!endpoint_error) {
+      result.remote_ip = endpoint.address().to_string();
+      result.ip_family = endpoint.address().is_v6() ? "ipv6" : "ipv4";
+    }
+
+    SSL* tls = stream.native_handle();
+    if (tls != nullptr) {
+      if (const char* version = SSL_get_version(tls); version != nullptr) {
+        result.tls_version = version;
+      }
+      if (const char* cipher = SSL_get_cipher_name(tls); cipher != nullptr) {
+        result.tls_cipher = cipher;
+      }
+      const unsigned char* alpn = nullptr;
+      unsigned alpn_size = 0U;
+      SSL_get0_alpn_selected(tls, &alpn, &alpn_size);
+      if (alpn != nullptr && alpn_size != 0U) {
+        result.alpn.assign(
+            reinterpret_cast<const char*>(alpn),
+            static_cast<std::size_t>(alpn_size));
+      }
+      result.tls_session_reused = SSL_session_reused(tls) == 1;
+      X509* certificate = SSL_get1_peer_certificate(tls);
+      if (certificate != nullptr) {
+        BIO* memory = BIO_new(BIO_s_mem());
+        if (memory != nullptr &&
+            ASN1_TIME_print(memory, X509_get0_notAfter(certificate)) == 1) {
+          char* data = nullptr;
+          const auto size = BIO_get_mem_data(memory, &data);
+          if (data != nullptr && size > 0) {
+            result.certificate_not_after.assign(
+                data, static_cast<std::size_t>(size));
+          }
+        }
+        if (memory != nullptr) {
+          BIO_free(memory);
+        }
+        X509_free(certificate);
+      }
+    }
+
+#if defined(__linux__)
+    tcp_info info{};
+    socklen_t size = sizeof(info);
+    if (::getsockopt(
+            beast::get_lowest_layer(stream).socket().native_handle(),
+            IPPROTO_TCP,
+            TCP_INFO,
+            &info,
+            &size) == 0) {
+      result.tcp_info_available = true;
+      result.tcp_rtt_us = info.tcpi_rtt;
+      result.tcp_rtt_variance_us = info.tcpi_rttvar;
+      result.tcp_retransmits = info.tcpi_total_retrans;
+      result.tcp_congestion_window = info.tcpi_snd_cwnd;
+      result.tcp_mss = info.tcpi_snd_mss;
+    }
+#endif
+  } catch (...) {
+    return result;
+  }
+  return result;
+}
+
+void refresh_transport_metadata(
+    TransportMetadata& destination,
+    TlsStream& stream) noexcept {
+  auto latest = transport_metadata(stream);
+  if (!latest.remote_ip.empty()) {
+    destination.remote_ip = std::move(latest.remote_ip);
+    destination.ip_family = std::move(latest.ip_family);
+  }
+  if (!latest.tls_version.empty()) {
+    destination.tls_version = std::move(latest.tls_version);
+  }
+  if (!latest.tls_cipher.empty()) {
+    destination.tls_cipher = std::move(latest.tls_cipher);
+  }
+  if (!latest.alpn.empty()) {
+    destination.alpn = std::move(latest.alpn);
+  }
+  if (!latest.certificate_not_after.empty()) {
+    destination.certificate_not_after =
+        std::move(latest.certificate_not_after);
+  }
+  destination.tls_session_reused =
+      destination.tls_session_reused || latest.tls_session_reused;
+  if (latest.tcp_info_available) {
+    destination.tcp_info_available = true;
+    destination.tcp_rtt_us = latest.tcp_rtt_us;
+    destination.tcp_rtt_variance_us = latest.tcp_rtt_variance_us;
+    destination.tcp_retransmits = latest.tcp_retransmits;
+    destination.tcp_congestion_window = latest.tcp_congestion_window;
+    destination.tcp_mss = latest.tcp_mss;
+  }
 }
 
 }  // namespace net_detail

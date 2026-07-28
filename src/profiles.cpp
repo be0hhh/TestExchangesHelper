@@ -12,7 +12,7 @@ namespace exchange_probe {
 
 std::vector<ProductSpec> make_profiles() {
   std::vector<ProductSpec> products;
-  products.reserve(28);
+  products.reserve(26);
   append_major_profiles(products);
   append_misc_profiles(products);
   append_extended_profiles(products);

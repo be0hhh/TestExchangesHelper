@@ -4,7 +4,7 @@ Standalone Linux C++20 diagnostic for CXETCPP exchange API profiles. It does
 not link CXETCPP or reuse its connectors: source anchors and network
 observations remain separate evidence.
 
-The probe covers 28 spot/futures products:
+The probe covers 26 spot/futures products:
 
 - public HTTPS and WebSocket observations;
 - read-only private HTTPS for six implemented HMAC families;
@@ -42,11 +42,14 @@ The implementation is split into independently compiled owners:
 - `contracts.cpp`, `gzip.cpp`, and `redaction.cpp` own payload validation;
 - profile factories, major venues, extended venues, and miscellaneous venues
   are separate profile units;
+- `placement.cpp` owns endpoint inventory, DNS/IP and TCP/TLS placement;
+- `profiler.cpp` owns bounded latency/stability runs and versioned bundles;
+- `compare.cpp` owns offline Pareto comparison without an automatic winner;
 - CTest has independent CLI, REST, WS/protobuf, redaction, and gzip binaries.
 
 ## Commands
 
-Tables are the default. `--jsonl` selects schema version 2 machine output.
+Tables are the default. `--jsonl` selects schema version 3 machine output.
 
 ```bash
 ./build/exchange-api-probe matrix
@@ -55,18 +58,68 @@ Tables are the default. `--jsonl` selects schema version 2 machine output.
 ./build/exchange-api-probe audit \
   --source-root /path/to/CXETCPP --jsonl
 
-./build/exchange-api-probe run \
+./build/exchange-api-probe latency \
   --venue okx --product futures \
-  --surface public --transport rest
+  --surface public --transport rest \
+  --mode low --connection cold
 
-./build/exchange-api-probe run \
+./build/exchange-api-probe stability \
   --venue mexc --product spot \
   --surface public --transport ws \
-  --timeout-ms 15000 --attempts 2
+  --mode low --duration-seconds 30
+
+./build/exchange-api-probe placement \
+  --venue binance --product futures \
+  --surface public --route both --mode low
+
+./build/exchange-api-probe compare \
+  --input results/server-a --input results/server-b \
+  --output-dir results/compare-a-b
 ```
 
 `--venue`, `--product`, and `--case` are repeatable. Empty selections are
 configuration errors. `--raw-public` adds at most 4096 public payload bytes.
+The legacy `run` command was removed in version 3; use `latency`.
+
+### Profiler owners and evidence
+
+`placement`, `latency`, `stability`, `audit`, and `compare` are independent
+owners and must be run separately. Placement reports DNS answers, natural and
+pinned routes, IPv4/IPv6, proxy/direct TCP, verified TLS and optional GeoIP.
+It does not infer an exchange backend, availability zone or matching cluster.
+
+Latency samples expose bounded stage timings in microseconds:
+
+- DNS, TCP, proxy CONNECT and TLS;
+- HTTP write, response-header completion (`ttfb_us`), body completion and JSON
+  parsing;
+- WebSocket handshake, welcome, subscribe, ACK and first matching data;
+- optional Linux `TCP_INFO` and TLS/certificate metadata.
+
+Low mode uses one lane and five latency samples. Standard uses four lanes and
+100 samples. High mode requires explicit lanes plus samples or duration and
+`--confirm-load`. Stability defaults to 30 seconds in low mode and five minutes
+in standard mode. Sample storage, matching state and raw capture remain bounded
+for every mode.
+
+Cold connections are the supported measurement contract. `warm` and `both`
+fail closed until the selected exchange has an explicit persistent-session
+profile; repeated reconnects are never labeled as warm measurements. Natural
+is the default route. A mixed `--route both` bundle keeps route labels in raw
+samples, but is excluded from offline Pareto comparison; run natural and pinned
+as separate bundles for comparison.
+
+Each latency/stability run bundle contains `manifest.json`, `samples.jsonl`,
+`summary.json`, `metrics.csv`, `REPORT.md`, and `latency_histogram.svg`.
+Percentiles use a bounded 16-subbucket logarithmic histogram and are labeled as
+bucket upper bounds. Reaching the artifact cap sets
+`artifact_complete=false`; it is never silently ignored.
+Bundle schema v2 records the percentile method in its comparison contract;
+v1 log2 bundles are rejected by `compare` instead of being mixed silently.
+
+GeoIP and raw public payload retention are opt-in. Private payloads and
+credential values are never persisted. Event age remains unavailable unless
+an exchange-owned timestamp contract and bounded clock uncertainty exist.
 
 ### Proxy
 
@@ -79,7 +132,7 @@ proxy fails explicitly; there is no silent direct fallback.
 Private probing is explicit:
 
 ```bash
-./build/exchange-api-probe run \
+./build/exchange-api-probe latency \
   --venue binance --product spot \
   --surface private --transport rest \
   --confirm-private --env-file ./credentials.env
@@ -101,6 +154,13 @@ BINANCE_SPOT_API_2_SECRET=...
 ```
 
 Some families additionally use `_PASSPHRASE` or `_ACCOUNT_ID`.
+
+Private WS/FIX profiling additionally requires
+`--confirm-session-lifecycle`. It currently fails closed as unsupported because
+the probe has no exchange-owned auth/logon lifecycle profiles. Such profiles
+must declare venue-specific create, keepalive and local-stop semantics; cleanup
+cannot be assumed to mean revoke/delete. Order, cancel and amend messages are
+outside this tool.
 
 ### Sandbox
 
@@ -142,6 +202,9 @@ registration or live readiness.
 
 - `matrix` describes compiled probe profiles only.
 - `audit` is static source evidence only.
-- `run` is a point-in-time external network observation only.
+- `latency` is a bounded point-in-time contract and latency observation.
+- `stability` is a bounded diagnostic sample series, not a load guarantee.
+- `placement` reports front-door transport evidence only.
+- `compare` produces Pareto fronts and never an automatic best placement.
 - None proves hft-trader readiness, production runtime selection, end-to-end
   parser delivery, account permissions, or safe live order capability.

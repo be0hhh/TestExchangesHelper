@@ -18,6 +18,8 @@ inline constexpr std::size_t kMaxWsMessageBytes = 8U * 1024U * 1024U;
 inline constexpr std::size_t kMaxHttpHeadBytes = 64U * 1024U;
 inline constexpr std::size_t kMaxRawPublicBytes = 4U * 1024U;
 inline constexpr std::size_t kMaxSandboxBytes = 1U * 1024U * 1024U;
+inline constexpr std::uint64_t kDefaultArtifactBytes =
+    256ULL * 1024ULL * 1024ULL;
 
 enum class Surface {
   Public,
@@ -243,6 +245,39 @@ struct ContractEvidence {
   std::string error;
 };
 
+struct StageTimings {
+  std::uint64_t dns_us{0};
+  std::uint64_t tcp_connect_us{0};
+  std::uint64_t proxy_connect_us{0};
+  std::uint64_t tls_handshake_us{0};
+  std::uint64_t request_write_us{0};
+  std::uint64_t ttfb_us{0};
+  std::uint64_t body_read_us{0};
+  std::uint64_t json_parse_us{0};
+  std::uint64_t ws_handshake_us{0};
+  std::uint64_t welcome_us{0};
+  std::uint64_t subscribe_write_us{0};
+  std::uint64_t ack_us{0};
+  std::uint64_t first_data_us{0};
+  std::uint64_t total_us{0};
+};
+
+struct TransportMetadata {
+  std::string remote_ip;
+  std::string ip_family;
+  std::string tls_version;
+  std::string tls_cipher;
+  std::string alpn;
+  std::string certificate_not_after;
+  std::uint64_t tcp_rtt_us{0};
+  std::uint64_t tcp_rtt_variance_us{0};
+  std::uint64_t tcp_retransmits{0};
+  std::uint64_t tcp_congestion_window{0};
+  std::uint64_t tcp_mss{0};
+  bool tcp_info_available{false};
+  bool tls_session_reused{false};
+};
+
 struct HttpResult {
   unsigned status{0};
   std::uint64_t elapsed_ms{0};
@@ -250,6 +285,8 @@ struct HttpResult {
   boost::json::value json;
   bool json_present{false};
   bool tls_verified{false};
+  StageTimings timings;
+  TransportMetadata transport;
   std::string stage;
   std::string error;
 };
@@ -263,6 +300,8 @@ struct WsResult {
   bool data_complete{false};
   bool binary{false};
   unsigned control_pings{0};
+  StageTimings timings;
+  TransportMetadata transport;
   std::string protocol_stage;
   std::string payload;
   boost::json::value json;
@@ -293,6 +332,8 @@ struct Observation {
   std::size_t payload_bytes{0};
   unsigned attempts_allowed{1};
   unsigned attempts_used{0};
+  StageTimings timings;
+  TransportMetadata transport_metadata;
   std::string stage;
   std::string error;
   boost::json::value evidence;

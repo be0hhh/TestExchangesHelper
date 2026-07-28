@@ -41,6 +41,13 @@ struct ResolveResult {
     std::chrono::steady_clock::time_point deadline,
     std::string& error);
 
+[[nodiscard]] bool connect_endpoint(
+    asio::io_context& context,
+    beast::tcp_stream& stream,
+    const tcp::endpoint& endpoint,
+    std::chrono::steady_clock::time_point deadline,
+    std::string& error);
+
 [[nodiscard]] bool establish_proxy_tunnel(
     asio::io_context& context,
     beast::tcp_stream& stream,
@@ -65,5 +72,15 @@ void close_tls(TlsStream& stream) noexcept;
 
 [[nodiscard]] std::uint64_t elapsed_ms(
     std::chrono::steady_clock::time_point start) noexcept;
+
+[[nodiscard]] std::uint64_t elapsed_us(
+    std::chrono::steady_clock::time_point start) noexcept;
+
+[[nodiscard]] TransportMetadata transport_metadata(
+    TlsStream& stream) noexcept;
+
+void refresh_transport_metadata(
+    TransportMetadata& destination,
+    TlsStream& stream) noexcept;
 
 }  // namespace exchange_probe::net_detail

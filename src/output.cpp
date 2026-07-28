@@ -29,13 +29,52 @@ void emit_json_line(
   output << boost::json::serialize(value) << '\n';
 }
 
+[[nodiscard]] boost::json::object stage_timings_json(
+    const StageTimings& timings) {
+  return {
+      {"dns_us", timings.dns_us},
+      {"tcp_connect_us", timings.tcp_connect_us},
+      {"proxy_connect_us", timings.proxy_connect_us},
+      {"tls_handshake_us", timings.tls_handshake_us},
+      {"request_write_us", timings.request_write_us},
+      {"ttfb_us", timings.ttfb_us},
+      {"body_read_us", timings.body_read_us},
+      {"json_parse_us", timings.json_parse_us},
+      {"ws_handshake_us", timings.ws_handshake_us},
+      {"welcome_us", timings.welcome_us},
+      {"subscribe_write_us", timings.subscribe_write_us},
+      {"ack_us", timings.ack_us},
+      {"first_data_us", timings.first_data_us},
+      {"total_us", timings.total_us},
+  };
+}
+
+[[nodiscard]] boost::json::object transport_metadata_json(
+    const TransportMetadata& metadata) {
+  return {
+      {"remote_ip", metadata.remote_ip},
+      {"ip_family", metadata.ip_family},
+      {"tls_version", metadata.tls_version},
+      {"tls_cipher", metadata.tls_cipher},
+      {"alpn", metadata.alpn},
+      {"certificate_not_after", metadata.certificate_not_after},
+      {"tls_session_reused", metadata.tls_session_reused},
+      {"tcp_info_available", metadata.tcp_info_available},
+      {"tcp_rtt_us", metadata.tcp_rtt_us},
+      {"tcp_rtt_variance_us", metadata.tcp_rtt_variance_us},
+      {"tcp_retransmits", metadata.tcp_retransmits},
+      {"tcp_congestion_window", metadata.tcp_congestion_window},
+      {"tcp_mss", metadata.tcp_mss},
+  };
+}
+
 }  // namespace
 
 boost::json::object capability_json(
     const ProductSpec& product,
     const CapabilityRow& capability) {
   return {
-      {"schema_version", 2},
+      {"schema_version", 3},
       {"kind", "capability"},
       {"venue", product.venue},
       {"product", product.product},
@@ -53,7 +92,7 @@ boost::json::object capability_json(
 
 boost::json::object observation_json(const Observation& observation) {
   boost::json::object result{
-      {"schema_version", 2},
+      {"schema_version", 3},
       {"kind", observation.kind},
       {"venue", observation.venue},
       {"product", observation.product},
@@ -76,6 +115,9 @@ boost::json::object observation_json(const Observation& observation) {
       {"payload_bytes", observation.payload_bytes},
       {"attempts_allowed", observation.attempts_allowed},
       {"attempts_used", observation.attempts_used},
+      {"stage_timings", stage_timings_json(observation.timings)},
+      {"transport_metadata",
+       transport_metadata_json(observation.transport_metadata)},
       {"stage", observation.stage},
       {"error", observation.error},
       {"evidence", observation.evidence},

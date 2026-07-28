@@ -15,8 +15,34 @@ enum class Command {
   Help,
   Matrix,
   Audit,
-  Run,
+  Latency,
+  Stability,
+  Compare,
   Sandbox,
+  Placement,
+};
+
+enum class PlacementMode {
+  Low,
+  Standard,
+  High,
+};
+
+enum class PlacementPath {
+  Direct,
+  Proxy,
+};
+
+enum class RouteMode {
+  Natural,
+  Pinned,
+  Both,
+};
+
+enum class ConnectionMode {
+  Cold,
+  Warm,
+  Both,
 };
 
 struct CliOptions {
@@ -30,8 +56,22 @@ struct CliOptions {
   std::optional<std::filesystem::path> sandbox_file;
   std::optional<std::filesystem::path> env_file;
   RunLimits limits;
+  PlacementMode placement_mode{PlacementMode::Standard};
+  PlacementPath placement_path{PlacementPath::Direct};
+  RouteMode route_mode{RouteMode::Natural};
+  ConnectionMode connection_mode{ConnectionMode::Cold};
+  std::optional<unsigned> lanes;
+  std::optional<unsigned> samples;
+  std::optional<unsigned> duration_seconds;
+  std::uint64_t max_artifact_bytes{kDefaultArtifactBytes};
+  std::optional<std::filesystem::path> output_dir;
+  std::vector<std::filesystem::path> inputs;
+  std::vector<std::string> geo_providers;
+  std::optional<std::filesystem::path> geo_cache;
   bool jsonl{false};
   bool confirm_private{false};
+  bool confirm_session_lifecycle{false};
+  bool confirm_load{false};
 };
 
 struct CliParseResult {
@@ -50,18 +90,24 @@ void print_help(std::ostream& output);
 [[nodiscard]] Observation run_public_rest(
     const ProductSpec& product,
     const RestCase& probe_case,
-    const RunLimits& limits);
+    const RunLimits& limits,
+    const std::optional<std::string>& pinned_ip = std::nullopt,
+    const std::optional<bool>& use_proxy = std::nullopt);
 
 [[nodiscard]] Observation run_private_rest(
     const ProductSpec& product,
     const RestCase& probe_case,
     const Credentials& credentials,
-    const RunLimits& limits);
+    const RunLimits& limits,
+    const std::optional<std::string>& pinned_ip = std::nullopt,
+    const std::optional<bool>& use_proxy = std::nullopt);
 
 [[nodiscard]] Observation run_public_ws(
     const ProductSpec& product,
     const WsCase& probe_case,
-    const RunLimits& limits);
+    const RunLimits& limits,
+    const std::optional<std::string>& pinned_ip = std::nullopt,
+    const std::optional<bool>& use_proxy = std::nullopt);
 
 [[nodiscard]] boost::json::object capability_json(
     const ProductSpec& product,
@@ -90,6 +136,26 @@ void emit_audit(
     std::ostream& output);
 
 [[nodiscard]] int run_application(
+    const CliOptions& options,
+    std::ostream& output,
+    std::ostream& error_output);
+
+[[nodiscard]] int run_placement(
+    const CliOptions& options,
+    std::ostream& output,
+    std::ostream& error_output);
+
+[[nodiscard]] int run_latency(
+    const CliOptions& options,
+    std::ostream& output,
+    std::ostream& error_output);
+
+[[nodiscard]] int run_stability(
+    const CliOptions& options,
+    std::ostream& output,
+    std::ostream& error_output);
+
+[[nodiscard]] int run_compare(
     const CliOptions& options,
     std::ostream& output,
     std::ostream& error_output);

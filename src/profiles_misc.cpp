@@ -34,7 +34,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
               {"ticker_24h"},
               RestContract::BinanceTicker24h,
               "BTCUSDT",
-              anchor("src/src/exchanges/aster/fapi/ReferenceCatalogV1.hpp")),
+              anchor("src/src/exchanges/aster/fapi/reference/ReferenceCatalogV1.hpp")),
           public_rest(
               "funding_current",
               "fapi.asterdex.com",
