@@ -176,7 +176,7 @@ HttpResult execute_http(
         target,
         11};
     request.set(http::field::host, probe_case.host);
-    request.set(http::field::user_agent, "cxet-exchange-api-probe/3");
+    request.set(http::field::user_agent, "exchange-api-probe/3");
     request.set(http::field::accept, "application/json");
     if (signed_request.has_value()) {
       for (const auto& [name, value] : signed_request->headers) {

@@ -1,0 +1,65 @@
+{
+  "schema": "exchange.api_probe.profile.v1",
+  "venue": "bybit",
+  "display_name": "Bybit",
+  "provenance": "built_in",
+  "products": [
+    {
+      "id": "spot", "default_symbol": "BTCUSDT", "symbol_format": "{base}{quote}",
+      "channels": [
+        {
+          "id": "trades", "name": "Public trades", "kind": "trade",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "stream.bybit.com", "port": 443, "path": "/v5/public/spot",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[\"publicTrade.{symbol}\"]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "none", "depth_levels": 0, "adapter": "",
+          "capabilities": ["live_trades"]
+        },
+        {
+          "id": "depth_1", "name": "Orderbook depth 1", "kind": "book_ticker",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "stream.bybit.com", "port": 443, "path": "/v5/public/spot",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[\"orderbook.1.{symbol}\"]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "stream_snapshot_delta", "depth_levels": 1,
+          "adapter": "", "capabilities": ["live_bbo"]
+        }
+      ],
+      "discovery": []
+    },
+    {
+      "id": "futures", "default_symbol": "BTCUSDT", "symbol_format": "{base}{quote}",
+      "channels": [
+        {
+          "id": "trades", "name": "Public trades", "kind": "trade",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "stream.bybit.com", "port": 443, "path": "/v5/public/linear",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[\"publicTrade.{symbol}\"]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "none", "depth_levels": 0, "adapter": "",
+          "capabilities": ["live_trades"]
+        },
+        {
+          "id": "depth_1", "name": "Orderbook depth 1", "kind": "book_ticker",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "stream.bybit.com", "port": 443, "path": "/v5/public/linear",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[\"orderbook.1.{symbol}\"]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "stream_snapshot_delta", "depth_levels": 1,
+          "adapter": "", "capabilities": ["live_bbo"]
+        },
+        {
+          "id": "depth_50", "name": "Orderbook depth 50", "kind": "depth",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "stream.bybit.com", "port": 443, "path": "/v5/public/linear",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[\"orderbook.50.{symbol}\"]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "stream_snapshot_delta", "depth_levels": 50,
+          "adapter": "", "capabilities": ["live_l2"]
+        }
+      ],
+      "discovery": []
+    }
+  ]
+}

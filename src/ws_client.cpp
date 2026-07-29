@@ -346,7 +346,7 @@ WsResult observe_ws(
         [&](websocket::request_type& request) {
           request.set(
               boost::beast::http::field::user_agent,
-              "cxet-exchange-api-probe/3");
+              "exchange-api-probe/3");
           for (const auto& [name, value] : probe_case.handshake_headers) {
             request.set(name, value);
           }

@@ -432,7 +432,7 @@ class Collector {
   stream.set_option(websocket::stream_base::decorator(
       [](websocket::request_type& request) {
         request.set(boost::beast::http::field::user_agent,
-                    "cxet-binance-ws-race/1");
+                    "exchange-api-probe-race/1");
       }));
   beast::get_lowest_layer(stream).expires_never();
   boost::system::error_code operation_error;
@@ -628,7 +628,7 @@ void write_summary(
       transport_valid && sequence_clean && !stats.matches.empty();
   std::ofstream json{directory / "summary.json"};
   json << "{\n"
-       << "  \"schema\":\"cxet.binance_ws_race.v1\",\n"
+       << "  \"schema\":\"exchange.api_probe.binance_ws_race.v1\",\n"
        << "  \"symbol\":\"" << json_escape(symbol) << "\",\n"
        << "  \"transport_valid\":"
        << (transport_valid ? "true" : "false") << ",\n"

@@ -55,13 +55,6 @@ enum class ProfileStatus {
   ExternalAdapterRequired,
 };
 
-enum class CoreStatus {
-  NotChecked,
-  Confirmed,
-  Mismatch,
-  NotObserved,
-};
-
 enum class Outcome {
   NotRun,
   Success,
@@ -214,7 +207,6 @@ struct CapabilityRow {
   Wire wire{Wire::None};
   Selection selection{Selection::DiagnosticVariant};
   ProfileStatus profile_status{ProfileStatus::NotProfiled};
-  CoreStatus core_status{CoreStatus::NotChecked};
   bool requires_confirmation{false};
   bool native{false};
 };
@@ -360,7 +352,6 @@ struct RunLimits {
 [[nodiscard]] std::string_view to_string(Wire value) noexcept;
 [[nodiscard]] std::string_view to_string(Selection value) noexcept;
 [[nodiscard]] std::string_view to_string(ProfileStatus value) noexcept;
-[[nodiscard]] std::string_view to_string(CoreStatus value) noexcept;
 [[nodiscard]] std::string_view to_string(Outcome value) noexcept;
 [[nodiscard]] std::string_view to_string(Expectation value) noexcept;
 [[nodiscard]] std::string_view to_string(RestContract value) noexcept;

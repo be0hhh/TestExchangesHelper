@@ -1,0 +1,13 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"bitget","display_name":"Bitget","provenance":"built_in",
+  "products":[
+    {"id":"spot","default_symbol":"BTCUSDT","symbol_format":"{base}{quote}","channels":[
+      {"id":"trades_sbe","kind":"trade","support":"adapter_required","transport":"ws","wire":"sbe","host":"ws.bitget.com","port":443,"path":"/v3/ws/public","subscribe":"","subscribe_binary":true,"compression":"none","adapter":"adapters/bitget_sbe","capabilities":["live_trades"]},
+      {"id":"book_ticker_sbe","kind":"book_ticker","support":"adapter_required","transport":"ws","wire":"sbe","host":"ws.bitget.com","port":443,"path":"/v3/ws/public","subscribe":"","subscribe_binary":true,"compression":"none","adapter":"adapters/bitget_sbe","depth_levels":1,"capabilities":["live_bbo"]}
+    ],"discovery":[]},
+    {"id":"futures","default_symbol":"BTCUSDT","symbol_format":"{base}{quote}","channels":[
+      {"id":"trades_sbe","kind":"trade","support":"adapter_required","transport":"ws","wire":"sbe","host":"ws.bitget.com","port":443,"path":"/v3/ws/public","subscribe":"","subscribe_binary":true,"compression":"none","adapter":"adapters/bitget_sbe","capabilities":["live_trades"]},
+      {"id":"orderbook_sbe","kind":"depth","support":"adapter_required","transport":"ws","wire":"sbe","host":"ws.bitget.com","port":443,"path":"/v3/ws/public","subscribe":"","subscribe_binary":true,"compression":"none","adapter":"adapters/bitget_sbe","depth_semantics":"stream_snapshot_delta","depth_levels":50,"capabilities":["live_l2"]}
+    ],"discovery":[]}
+  ]
+}

@@ -1,210 +1,160 @@
 # exchange-api-probe
 
-Standalone Linux C++20 diagnostic for CXETCPP exchange API profiles. It does
-not link CXETCPP or reuse its connectors: source anchors and network
-observations remain separate evidence.
+`exchange-api-probe` is an independent Linux C++20 diagnostic for exchange
+HTTP, WebSocket and explicitly enabled read-only private surfaces. It can be
+cloned and built without any parent repository.
 
-The probe covers 26 spot/futures products:
+The tool separates four kinds of evidence:
 
-- public HTTPS and WebSocket observations;
-- read-only private HTTPS for six implemented HMAC families;
-- capability matrix and optional CXETCPP source-anchor audit;
-- bounded public-only sandbox profiles;
-- JSON, binary JSON, protobuf, SBE and FIX/SBE declarations.
+- `exact`: the profile declares enough wire semantics for normalization;
+- `observed_only`: raw capture is supported, but semantic decoding is not
+  asserted;
+- `adapter_required`: raw capture may be supported and a language-neutral
+  adapter is required for decoding;
+- `candidate` or `unavailable`: discovery input or an explicit unsupported
+  surface.
 
-Success is fail-closed. TCP/TLS/HTTP alone is not an exchange-contract proof.
-Exact REST contracts validate the native logical envelope, symbol and fields.
-Negative-symbol cases pass only on explicitly allowed statuses or exchange
-codes. WebSocket profiles validate acknowledgement and/or matching data.
+None of these labels proves matching-engine location, trading readiness,
+causality, or production latency.
 
-## Dependencies and build
-
-Ubuntu 24.04:
+## Build
 
 ```bash
-sudo apt update
-sudo apt install build-essential cmake libboost-all-dev libssl-dev
-cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
 ```
 
-There is no Ninja, vcpkg, Conan, FetchContent, vendored library, Python or
-system-zlib dependency. HTTPS/WSS uses Boost.Asio/Beast, JSON uses Boost.JSON,
-and TLS/HMAC use OpenSSL. HTX/BingX gzip uses Beast's header-only deflate and
-Boost.CRC.
-
-The implementation is split into independently compiled owners:
-
-- `cli.cpp` parses arguments; `application.cpp` orchestrates commands;
-- `probe_runner.cpp` classifies REST/WS observations;
-- `http_client.cpp`, `ws_client.cpp`, and `net_common.cpp` own transport stages;
-- `contracts.cpp`, `gzip.cpp`, and `redaction.cpp` own payload validation;
-- profile factories, major venues, extended venues, and miscellaneous venues
-  are separate profile units;
-- `placement.cpp` owns endpoint inventory, DNS/IP and TCP/TLS placement;
-- `profiler.cpp` owns bounded latency/stability runs and versioned bundles;
-- `compare.cpp` owns offline Pareto comparison without an automatic winner;
-- CTest has independent CLI, REST, WS/protobuf, redaction, and gzip binaries.
-
-## Commands
-
-Tables are the default. `--jsonl` selects schema version 3 machine output.
+Dependencies are OpenSSL, Boost.JSON, pthreads and a C++20 compiler. The
+optional development viewer uses Node.js:
 
 ```bash
-./build/exchange-api-probe matrix
-./build/exchange-api-probe matrix --venue binance --product futures --jsonl
+cd web
+npm install
+npm run build
+```
 
-./build/exchange-api-probe audit \
-  --source-root /path/to/CXETCPP --jsonl
+Production viewer assets are embedded in the native executable; Node.js is not
+required to inspect a bundle.
 
-./build/exchange-api-probe latency \
-  --venue okx --product futures \
-  --surface public --transport rest \
-  --mode low --connection cold
+## Profiles
 
-./build/exchange-api-probe stability \
-  --venue mexc --product spot \
-  --surface public --transport ws \
-  --mode low --duration-seconds 30
+Profiles are strict JSON documents under `profiles/`, described by
+`schemas/profile.v1.schema.json`. The built-in catalog contains 26
+venue/product entries. Profile edits are intentionally separate from observed
+discovery evidence.
 
-./build/exchange-api-probe placement \
+```bash
+./build/exchange-api-probe profile list
+./build/exchange-api-probe profile search --query depth
+./build/exchange-api-probe profile show --venue binance --product futures
+./build/exchange-api-probe profile validate
+./build/exchange-api-probe profile scaffold \
+  --venue example --product spot --output-dir proposals
+./build/exchange-api-probe profile promote \
+  --input results/discovery/profile-proposal.json \
+  --output-dir proposals
+```
+
+`profile promote` creates a bounded promotion-review packet and reports
+`catalog_mutated=false`; it never edits a trusted profile implicitly. Review
+the packet and copy accepted fields into a profile in version control.
+
+## Bounded discovery
+
+Discovery executes only candidates already present in a profile and writes
+immutable evidence plus a proposal:
+
+```bash
+./build/exchange-api-probe discover \
   --venue binance --product futures \
-  --surface public --route both --mode low
-
-./build/exchange-api-probe compare \
-  --input results/server-a --input results/server-b \
-  --output-dir results/compare-a-b
+  --output-dir results/discovery
 ```
 
-`--venue`, `--product`, and `--case` are repeatable. Empty selections are
-configuration errors. `--raw-public` adds at most 4096 public payload bytes.
-The legacy `run` command was removed in version 3; use `latency`.
+The output is `evidence.jsonl` and `profile-proposal.json`. It is not an
+automatic profile mutation.
 
-### Profiler owners and evidence
+## Research capture and analysis
 
-`placement`, `latency`, `stability`, `audit`, and `compare` are independent
-owners and must be run separately. Placement reports DNS answers, natural and
-pinned routes, IPv4/IPv6, proxy/direct TCP, verified TLS and optional GeoIP.
-It does not infer an exchange backend, availability zone or matching cluster.
-
-Latency samples expose bounded stage timings in microseconds:
-
-- DNS, TCP, proxy CONNECT and TLS;
-- HTTP write, response-header completion (`ttfb_us`), body completion and JSON
-  parsing;
-- WebSocket handshake, welcome, subscribe, ACK and first matching data;
-- optional Linux `TCP_INFO` and TLS/certificate metadata.
-
-Low mode uses one lane and five latency samples. Standard uses four lanes and
-100 samples. High mode requires explicit lanes plus samples or duration and
-`--confirm-load`. Stability defaults to 30 seconds in low mode and five minutes
-in standard mode. Sample storage, matching state and raw capture remain bounded
-for every mode.
-
-Cold connections are the supported measurement contract. `warm` and `both`
-fail closed until the selected exchange has an explicit persistent-session
-profile; repeated reconnects are never labeled as warm measurements. Natural
-is the default route. A mixed `--route both` bundle keeps route labels in raw
-samples, but is excluded from offline Pareto comparison; run natural and pinned
-as separate bundles for comparison.
-
-Each latency/stability run bundle contains `manifest.json`, `samples.jsonl`,
-`summary.json`, `metrics.csv`, `REPORT.md`, and `latency_histogram.svg`.
-Percentiles use a bounded 16-subbucket logarithmic histogram and are labeled as
-bucket upper bounds. Reaching the artifact cap sets
-`artifact_complete=false`; it is never silently ignored.
-Bundle schema v2 records the percentile method in its comparison contract;
-v1 log2 bundles are rejected by `compare` instead of being mixed silently.
-
-GeoIP and raw public payload retention are opt-in. Private payloads and
-credential values are never persisted. Event age remains unavailable unless
-an exchange-owned timestamp contract and bounded clock uncertainty exist.
-
-### Proxy
-
-`HTTPS_PROXY`/`https_proxy` and `NO_PROXY`/`no_proxy` apply to HTTPS and WSS.
-Only HTTP CONNECT proxies are supported. An invalid or unavailable configured
-proxy fails explicitly; there is no silent direct fallback.
-
-### Read-only private REST
-
-Private probing is explicit:
+The default research topology is one WebSocket session per channel, three
+rounds of five minutes each. Connection order is reversed between rounds to
+reduce a fixed startup-order bias.
 
 ```bash
-./build/exchange-api-probe latency \
-  --venue binance --product spot \
-  --surface private --transport rest \
-  --confirm-private --env-file ./credentials.env
+./build/exchange-api-probe research run \
+  --venue binance --product futures --symbol btcusdt \
+  --channel trades --channel book_ticker --channel depth_100ms \
+  --output-dir results/binance-futures
 ```
 
-Public commands never load credential variables or env files. Private profiles
-contain GET-only account, balance, open-order and position probes. There is no
-order mutation route. Credentials are non-copyable and cleansed on destruction;
-output contains shapes, not private values.
+Use `--no-open` for automation. Without it, the localhost read-only viewer is
+started after capture and the browser is opened. Capture stores exact inbound
+frame bytes in `frames.bin` and an immutable index in `frames.jsonl`.
 
-Variables use a product prefix and optional numeric slot:
+Analyze an existing neutral v3 bundle without network access:
+
+```bash
+./build/exchange-api-probe research analyze \
+  --input results/binance-futures
+./build/exchange-api-probe serve --input results
+```
+
+Analysis produces:
+
+- normalized `events.jsonl`;
+- BBO/depth `state_transitions.jsonl`;
+- evidence-labelled `relations.jsonl`;
+- `findings.json` and `REPORT.md`.
+
+The four time domains remain distinct: local monotonic, local UTC, exchange
+event time and exchange transaction time. Missing exchange clocks remain null;
+they are never replaced with receive time.
+
+Relation modes are independent:
+
+- native identity;
+- exchange-time cohort;
+- state convergence;
+- bounded receive-window market-effect heuristic.
+
+Heuristic relations explicitly state `causality: not_asserted`.
+
+## Private and packet capture safety
+
+Existing private REST probes are read-only and require both credentials and
+`--confirm-private`. Order creation, amendment, cancellation and account
+mutation are outside the tool.
+
+Private WebSocket and FIX research additionally require an explicit lifecycle
+profile and `--confirm-session-lifecycle`. A missing lifecycle fails closed.
+Profile schema v1 records adapter identities and the language-neutral protocol,
+but the native analyzer deliberately remains fail-closed with
+`binary_adapter_required`; subprocess execution is not enabled in this version.
+`--allow-adapter` and `--allow-private-adapter` reserve the future explicit
+trust gates and currently do not execute anything.
+
+Packet capture is public-only, opt-in, bounded, and may require OS capabilities.
+TLS key logging is never enabled implicitly. See `doc/ADAPTER_PROTOCOL.md` for
+the adapter JSONL contract.
+
+## Existing diagnostics
+
+The prior commands remain available:
 
 ```text
-BINANCE_SPOT_API_KEY=...
-BINANCE_SPOT_API_SECRET=...
-
-BINANCE_SPOT_API_2_KEY=...
-BINANCE_SPOT_API_2_SECRET=...
+matrix
+latency
+stability
+placement
+compare
+sandbox
 ```
 
-Some families additionally use `_PASSPHRASE` or `_ACCOUNT_ID`.
+They use bounded attempts, timeouts and artifact limits. `latency` reports the
+measured client boundary only; it must not be presented as matching-engine or
+order-path latency.
 
-Private WS/FIX profiling additionally requires
-`--confirm-session-lifecycle`. It currently fails closed as unsupported because
-the probe has no exchange-owned auth/logon lifecycle profiles. Such profiles
-must declare venue-specific create, keepalive and local-stop semantics; cleanup
-cannot be assumed to mean revoke/delete. Order, cancel and amend messages are
-outside this tool.
+## Bundle compatibility
 
-### Sandbox
-
-Sandbox input is public-only, bounded to 1 MiB, and rejects private,
-credential, header and auth fields:
-
-```json
-{
-  "venue": "example",
-  "product": "spot",
-  "public_rest": [
-    {
-      "name": "time",
-      "host": "api.example.com",
-      "path": "/v1/time",
-      "capabilities": ["server_time"]
-    }
-  ],
-  "public_ws": [
-    {
-      "name": "trades",
-      "host": "stream.example.com",
-      "path": "/ws",
-      "subscribe": "{\"op\":\"subscribe\",\"topic\":\"trades\"}",
-      "capabilities": ["live_trades"]
-    }
-  ]
-}
-```
-
-```bash
-./build/exchange-api-probe sandbox --file profile.json --transport ws
-```
-
-Sandbox results are diagnostic variants; they do not claim CXETCPP
-registration or live readiness.
-
-## Evidence boundary
-
-- `matrix` describes compiled probe profiles only.
-- `audit` is static source evidence only.
-- `latency` is a bounded point-in-time contract and latency observation.
-- `stability` is a bounded diagnostic sample series, not a load guarantee.
-- `placement` reports front-door transport evidence only.
-- `compare` produces Pareto fronts and never an automatic best placement.
-- None proves hft-trader readiness, production runtime selection, end-to-end
-  parser delivery, account permissions, or safe live order capability.
+Research accepts only `exchange.api_probe.bundle.v3`. Older prefixed bundle
+formats are deliberately not migrated or silently read. The legacy profiler
+and compare path use neutral `exchange.api_probe.bundle.v2`.

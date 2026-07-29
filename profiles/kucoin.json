@@ -1,0 +1,12 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"kucoin","display_name":"KuCoin","provenance":"built_in",
+  "products":[
+    {"id":"spot","default_symbol":"BTC-USDT","symbol_format":"{base}-{quote}","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"binary_json","host":"x-push-spot.kucoin.com","port":443,"path":"/endpoint","subscribe":"{\"id\":\"probe-1\",\"action\":\"SUBSCRIBE\",\"channel\":\"trade\",\"tradeType\":\"SPOT\",\"symbol\":\"{symbol}\"}","compression":"none","capabilities":["live_trades"]},
+      {"id":"book_ticker","kind":"book_ticker","support":"observed_only","transport":"ws","wire":"binary_json","host":"x-push-spot.kucoin.com","port":443,"path":"/endpoint","subscribe":"{\"id\":\"probe-1\",\"action\":\"SUBSCRIBE\",\"channel\":\"obu\",\"tradeType\":\"SPOT\",\"symbol\":\"{symbol}\",\"depth\":\"1\",\"rpiFilter\":0}","compression":"none","depth_levels":1,"capabilities":["live_bbo"]}
+    ],"discovery":[]},
+    {"id":"futures","default_symbol":"XBTUSDTM","symbol_format":"venue_native","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"binary_json","host":"x-push-futures.kucoin.com","port":443,"path":"/endpoint","subscribe":"{\"id\":\"probe-1\",\"action\":\"SUBSCRIBE\",\"channel\":\"trade\",\"tradeType\":\"FUTURES\",\"symbol\":\"{symbol}\"}","compression":"none","capabilities":["live_trades"]}
+    ],"discovery":[]}
+  ]
+}

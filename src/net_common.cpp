@@ -271,7 +271,7 @@ bool establish_proxy_tunnel(
       std::string{destination_host} + ":" + std::string{destination_port},
       11};
   request.set(http::field::host, request.target());
-  request.set(http::field::user_agent, "cxet-exchange-api-probe/2");
+  request.set(http::field::user_agent, "exchange-api-probe/3");
   request.set(http::field::proxy_connection, "keep-alive");
   if (!proxy.authorization.empty()) {
     request.set(http::field::proxy_authorization, proxy.authorization);

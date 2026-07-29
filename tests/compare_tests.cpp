@@ -69,7 +69,7 @@ void write_bundle(
   write_json(
       directory / "manifest.json",
       {
-          {"schema", "cxet.exchange_probe.bundle.v2"},
+          {"schema", "exchange.api_probe.bundle.v2"},
           {"schema_version", 2},
           {"owner", "latency"},
           {"host", "test-host"},
@@ -80,7 +80,7 @@ void write_bundle(
   write_json(
       directory / "summary.json",
       {
-          {"schema", "cxet.exchange_probe.bundle.v2"},
+          {"schema", "exchange.api_probe.bundle.v2"},
           {"schema_version", 2},
           {"owner", "latency"},
           {"artifact_complete", true},

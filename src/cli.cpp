@@ -75,8 +75,6 @@ CliParseResult parse_cli(int argc, char** argv) {
     result.options.command = Command::Help;
   } else if (command == "matrix") {
     result.options.command = Command::Matrix;
-  } else if (command == "audit") {
-    result.options.command = Command::Audit;
   } else if (command == "latency") {
     result.options.command = Command::Latency;
   } else if (command == "stability") {
@@ -97,6 +95,29 @@ CliParseResult parse_cli(int argc, char** argv) {
           "placement auth was replaced by --surface private --confirm-private";
       return result;
     }
+  } else if (command == "profile") {
+    result.options.command = Command::Profile;
+    if (argc < 3) {
+      result.error =
+          "profile requires list, search, show, validate, scaffold or promote";
+      return result;
+    }
+    result.options.action = argv[2];
+    option_start = 3;
+  } else if (command == "discover") {
+    result.options.command = Command::Discover;
+  } else if (command == "research") {
+    result.options.command = Command::Research;
+    if (argc > 2 &&
+        (std::string_view{argv[2]} == "run" ||
+         std::string_view{argv[2]} == "analyze")) {
+      result.options.action = argv[2];
+      option_start = 3;
+    } else {
+      result.options.action = "run";
+    }
+  } else if (command == "serve") {
+    result.options.command = Command::Serve;
   } else {
     result.error = "unknown command: " + std::string{command};
     return result;
@@ -107,6 +128,16 @@ CliParseResult parse_cli(int argc, char** argv) {
     std::string value;
     if (option == "--jsonl") {
       result.options.jsonl = true;
+    } else if (option == "--no-open") {
+      result.options.open_viewer = false;
+    } else if (option == "--allow-adapter") {
+      result.options.allow_adapter = true;
+    } else if (option == "--allow-private-adapter") {
+      result.options.allow_private_adapter = true;
+    } else if (option == "--pcap") {
+      result.options.capture_pcap = true;
+    } else if (option == "--tls-keylog") {
+      result.options.capture_tls_keys = true;
     } else if (option == "--confirm-private") {
       result.options.confirm_private = true;
     } else if (option == "--confirm-session-lifecycle") {
@@ -125,7 +156,7 @@ CliParseResult parse_cli(int argc, char** argv) {
         return result;
       }
       result.options.products.push_back(std::move(value));
-    } else if (option == "--case") {
+    } else if (option == "--case" || option == "--capability") {
       if (!option_value(argc, argv, index, option, value, result.error)) {
         return result;
       }
@@ -156,11 +187,6 @@ CliParseResult parse_cli(int argc, char** argv) {
         result.error = "--transport must be rest, ws or fix";
         return result;
       }
-    } else if (option == "--source-root") {
-      if (!option_value(argc, argv, index, option, value, result.error)) {
-        return result;
-      }
-      result.options.source_root = value;
     } else if (option == "--file") {
       if (!option_value(argc, argv, index, option, value, result.error)) {
         return result;
@@ -313,17 +339,42 @@ CliParseResult parse_cli(int argc, char** argv) {
         return result;
       }
       result.options.geo_cache = value;
+    } else if (option == "--profile-root") {
+      if (!option_value(argc, argv, index, option, value, result.error)) {
+        return result;
+      }
+      result.options.profile_root = value;
+    } else if (option == "--query") {
+      if (!option_value(argc, argv, index, option, value, result.error)) {
+        return result;
+      }
+      result.options.query = std::move(value);
+    } else if (option == "--symbol") {
+      if (!option_value(argc, argv, index, option, value, result.error)) {
+        return result;
+      }
+      result.options.symbol = std::move(value);
+    } else if (option == "--channel") {
+      if (!option_value(argc, argv, index, option, value, result.error)) {
+        return result;
+      }
+      result.options.channels.push_back(std::move(value));
+    } else if (option == "--rounds") {
+      if (!option_value(argc, argv, index, option, value, result.error)) {
+        return result;
+      }
+      const auto parsed = parse_unsigned(value);
+      if (!parsed.has_value() || *parsed == 0U || *parsed > 100U) {
+        result.error = "--rounds must be in [1,100]";
+        return result;
+      }
+      result.options.rounds = *parsed;
     } else {
       result.error = "unknown option: " + std::string{option};
       return result;
     }
   }
 
-  if (result.options.command == Command::Audit &&
-      !result.options.source_root.has_value()) {
-    result.error = "audit requires --source-root";
-    return result;
-  }
   if (result.options.command == Command::Sandbox &&
       !result.options.sandbox_file.has_value()) {
     result.error = "sandbox requires --file";
@@ -333,9 +384,16 @@ CliParseResult parse_cli(int argc, char** argv) {
       result.options.command == Command::Placement ||
       result.options.command == Command::Latency ||
       result.options.command == Command::Stability;
+  const bool research_command =
+      result.options.command == Command::Research ||
+      result.options.command == Command::Discover;
   const bool session_profiler =
       result.options.command == Command::Latency ||
       result.options.command == Command::Stability;
+  const bool research_run =
+      result.options.command == Command::Research &&
+      result.options.action == "run";
+  const bool private_session_command = session_profiler || research_run;
   if (profiler &&
       result.options.surface == Surface::Private &&
       !result.options.confirm_private) {
@@ -355,9 +413,10 @@ CliParseResult parse_cli(int argc, char** argv) {
     return result;
   }
   if (result.options.confirm_session_lifecycle &&
-      (!session_profiler ||
+      (!private_session_command ||
        result.options.surface != Surface::Private ||
-       (result.options.transport != Transport::WebSocket &&
+       (!research_run &&
+        result.options.transport != Transport::WebSocket &&
         result.options.transport != Transport::Fix))) {
     result.error =
         "--confirm-session-lifecycle requires private ws or fix";
@@ -372,7 +431,17 @@ CliParseResult parse_cli(int argc, char** argv) {
         "private ws or fix requires --confirm-session-lifecycle";
     return result;
   }
+  if (research_run &&
+      result.options.surface == Surface::Private &&
+      (!result.options.confirm_private ||
+       !result.options.confirm_session_lifecycle)) {
+    result.error =
+        "private research requires --confirm-private and "
+        "--confirm-session-lifecycle";
+    return result;
+  }
   if (result.options.command != Command::Placement &&
+      !research_command &&
       (!result.options.geo_providers.empty() ||
        result.options.geo_cache.has_value())) {
     result.error = "GeoIP options are valid only for placement";
@@ -393,6 +462,7 @@ CliParseResult parse_cli(int argc, char** argv) {
     return result;
   }
   if (!session_profiler &&
+      !research_command &&
       (result.options.lanes.has_value() ||
        result.options.samples.has_value() ||
        result.options.duration_seconds.has_value())) {
@@ -406,11 +476,17 @@ CliParseResult parse_cli(int argc, char** argv) {
     return result;
   }
   if (result.options.command != Command::Compare &&
+      result.options.command != Command::Serve &&
+      !(result.options.command == Command::Research &&
+        result.options.action == "analyze") &&
+      !(result.options.command == Command::Profile &&
+        result.options.action == "promote") &&
       !result.options.inputs.empty()) {
     result.error = "--input is valid only for compare";
     return result;
   }
   if (!profiler &&
+      !research_command &&
       (result.options.confirm_private || result.options.env_file.has_value())) {
     result.error =
         "private credential options are valid only for profiler commands";
@@ -435,6 +511,14 @@ CliParseResult parse_cli(int argc, char** argv) {
         "elevated lanes, samples or duration require --confirm-load";
     return result;
   }
+  if (research_run &&
+      (result.options.rounds > 3U ||
+       result.options.duration_seconds.value_or(300U) > 300U) &&
+      !result.options.confirm_load) {
+    result.error =
+        "research above 3 rounds or 300 seconds requires --confirm-load";
+    return result;
+  }
   if ((result.options.command == Command::Latency ||
        result.options.command == Command::Stability) &&
       result.options.placement_mode == PlacementMode::High &&
@@ -443,6 +527,55 @@ CliParseResult parse_cli(int argc, char** argv) {
         !result.options.duration_seconds.has_value()))) {
     result.error =
         "high latency/stability requires --lanes and --samples or --duration-seconds";
+    return result;
+  }
+  if (result.options.command == Command::Profile) {
+    const bool known_action =
+        result.options.action == "list" ||
+        result.options.action == "search" ||
+        result.options.action == "show" ||
+        result.options.action == "validate" ||
+        result.options.action == "scaffold" ||
+        result.options.action == "promote";
+    if (!known_action) {
+      result.error = "unknown profile action: " + result.options.action;
+      return result;
+    }
+    if (result.options.action == "promote" &&
+        result.options.inputs.size() != 1U) {
+      result.error = "profile promote requires exactly one --input proposal";
+      return result;
+    }
+  }
+  if ((result.options.command == Command::Discover ||
+       (result.options.command == Command::Research &&
+        result.options.action == "run")) &&
+      (result.options.venues.size() != 1U ||
+       result.options.products.size() != 1U)) {
+    result.error =
+        "discover/research run requires exactly one --venue and --product";
+    return result;
+  }
+  if (result.options.capture_tls_keys && !result.options.capture_pcap) {
+    result.error = "--tls-keylog requires --pcap";
+    return result;
+  }
+  if ((result.options.capture_pcap || result.options.capture_tls_keys ||
+       !result.options.channels.empty()) &&
+      !research_run) {
+    result.error =
+        "--pcap, --tls-keylog and --channel require research run";
+    return result;
+  }
+  if ((result.options.allow_adapter ||
+       result.options.allow_private_adapter) &&
+      result.options.command != Command::Research) {
+    result.error = "adapter trust flags require research";
+    return result;
+  }
+  if ((result.options.capture_pcap || result.options.capture_tls_keys) &&
+      result.options.surface == Surface::Private) {
+    result.error = "private research forbids pcap and TLS key logging";
     return result;
   }
   result.ok = true;
@@ -454,12 +587,17 @@ void print_help(std::ostream& output) {
       << "exchange-api-probe 3 (Linux, C++20)\n"
       << "Usage:\n"
       << "  exchange-api-probe matrix [filters] [--jsonl]\n"
-      << "  exchange-api-probe audit --source-root PATH [--jsonl]\n"
       << "  exchange-api-probe latency [filters] [profiler options]\n"
       << "  exchange-api-probe stability [filters] [profiler options]\n"
       << "  exchange-api-probe placement [scan] [filters] [profiler options]\n"
       << "  exchange-api-probe compare --input BUNDLE [--input BUNDLE...]\n"
       << "  exchange-api-probe sandbox --file PROFILE.json [probe options]\n"
+      << "  exchange-api-probe profile list|search|show|validate|scaffold|promote\n"
+      << "  exchange-api-probe discover --venue NAME --product NAME [filters]\n"
+      << "  exchange-api-probe research run --venue NAME --product NAME "
+         "[--channel ID...]\n"
+      << "  exchange-api-probe research analyze --input BUNDLE\n"
+      << "  exchange-api-probe serve [--input BUNDLE|RESULTS_ROOT]\n"
       << "Profiler options:\n"
       << "      [--surface public|private] [--transport rest|ws|fix]\n"
       << "      [--mode low|standard|high] [--lanes N] [--samples N]\n"
@@ -471,6 +609,10 @@ void print_help(std::ostream& output) {
       << "      [--env-file PATH]\n"
       << "      [--geo-provider ipinfo|ipapi|none] [--geo-cache PATH]\n"
       << "Filters (repeatable): --venue NAME --product NAME --case NAME\n"
+      << "Profile search: [--query TEXT] [--capability NAME]\n"
+      << "Research: [--profile-root PATH] [--symbol SYMBOL] "
+         "[--channel ID] [--rounds N] [--no-open] [--pcap]\n"
+      << "          [--allow-adapter] [--allow-private-adapter]\n"
       << "\nPrivate REST is read-only and requires --confirm-private. Public\n"
       << "commands never load credentials. HTTPS_PROXY/https_proxy and\n"
       << "NO_PROXY/no_proxy are honored without silent direct fallback.\n";

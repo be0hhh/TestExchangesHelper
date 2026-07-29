@@ -1,0 +1,6 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"bingx","display_name":"BingX","provenance":"built_in",
+  "products":[{"id":"futures","default_symbol":"BTC-USDT","symbol_format":"{base}-{quote}","channels":[
+    {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"open-api-swap.bingx.com","port":443,"path":"/swap-market","subscribe":"{\"id\":\"probe\",\"reqType\":\"sub\",\"dataType\":\"{symbol}@trade\"}","compression":"gzip","capabilities":["live_trades"]}
+  ],"discovery":[]}]
+}

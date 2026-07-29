@@ -1,0 +1,74 @@
+{
+  "schema": "exchange.api_probe.profile.v1",
+  "venue": "okx",
+  "display_name": "OKX",
+  "provenance": "built_in",
+  "products": [
+    {
+      "id": "spot", "default_symbol": "BTC-USDT", "symbol_format": "{base}-{quote}",
+      "channels": [
+        {
+          "id": "trades", "name": "Trades all", "kind": "trade",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "ws.okx.com", "port": 443, "path": "/ws/v5/public",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"trades-all\",\"instId\":\"{symbol}\"}]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "none", "depth_levels": 0, "adapter": "",
+          "capabilities": ["live_trades"]
+        },
+        {
+          "id": "bbo_tbt", "name": "BBO tick by tick", "kind": "book_ticker",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "ws.okx.com", "port": 443, "path": "/ws/v5/public",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"bbo-tbt\",\"instId\":\"{symbol}\"}]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "complete_snapshot", "depth_levels": 1,
+          "adapter": "", "capabilities": ["live_bbo"]
+        },
+        {
+          "id": "books5", "name": "Books 5", "kind": "depth",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "ws.okx.com", "port": 443, "path": "/ws/v5/public",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"books5\",\"instId\":\"{symbol}\"}]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "complete_snapshot", "depth_levels": 5,
+          "adapter": "", "capabilities": ["live_l2"]
+        }
+      ],
+      "discovery": []
+    },
+    {
+      "id": "futures", "default_symbol": "BTC-USDT-SWAP", "symbol_format": "{base}-{quote}-SWAP",
+      "channels": [
+        {
+          "id": "trades", "name": "Trades all", "kind": "trade",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "ws.okx.com", "port": 443, "path": "/ws/v5/public",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"trades-all\",\"instId\":\"{symbol}\"}]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "none", "depth_levels": 0, "adapter": "",
+          "capabilities": ["live_trades"]
+        },
+        {
+          "id": "bbo_tbt", "name": "BBO tick by tick", "kind": "book_ticker",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "ws.okx.com", "port": 443, "path": "/ws/v5/public",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"bbo-tbt\",\"instId\":\"{symbol}\"}]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "complete_snapshot", "depth_levels": 1,
+          "adapter": "", "capabilities": ["live_bbo"]
+        },
+        {
+          "id": "books5", "name": "Books 5", "kind": "depth",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "ws.okx.com", "port": 443, "path": "/ws/v5/public",
+          "subscribe": "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"books5\",\"instId\":\"{symbol}\"}]}",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "complete_snapshot", "depth_levels": 5,
+          "adapter": "", "capabilities": ["live_l2"]
+        }
+      ],
+      "discovery": []
+    }
+  ]
+}

@@ -6,6 +6,8 @@
 namespace exchange_probe {
 using namespace profile_factory;
 
+#define anchor(...) SourceAnchor{}
+
 void append_misc_profiles(std::vector<ProductSpec>& products) {
   auto aster_lowercase = negative_rest(
       public_rest(
@@ -77,13 +79,13 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
       "trades",
       "open-api-swap.bingx.com",
       "/swap-market",
-      R"({"id":"cxet-bingx","reqType":"sub","dataType":"BTC-USDT@trade"})",
+      R"({"id":"probe-bingx","reqType":"sub","dataType":"BTC-USDT@trade"})",
       {"live_trades"},
       anchor("src/src/exchanges/bingx/swap/config.cpp", "kSubscribeTrades"),
       WsAckKind::BingxSubscription,
       "BTC-USDT@trade",
       "BTC-USDT",
-      "cxet-bingx");
+      "probe-bingx");
   bingx.data_kind = WsDataKind::BingxTrades;
   bingx.compression = Compression::Gzip;
   bingx.ack_implies_data = true;
@@ -167,5 +169,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
       },
   });
 }
+
+#undef anchor
 
 }  // namespace exchange_probe

@@ -1,0 +1,13 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"htx","display_name":"HTX","provenance":"built_in",
+  "products":[
+    {"id":"spot","default_symbol":"btcusdt","symbol_format":"{base}{quote}:lower","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"api.huobi.pro","port":443,"path":"/ws","subscribe":"{\"sub\":\"market.{symbol}.trade.detail\",\"id\":\"probe\"}","compression":"gzip","capabilities":["live_trades"]},
+      {"id":"book_ticker","kind":"book_ticker","support":"observed_only","transport":"ws","wire":"json","host":"api.huobi.pro","port":443,"path":"/ws","subscribe":"{\"sub\":\"market.{symbol}.bbo\",\"id\":\"probe\"}","compression":"gzip","depth_levels":1,"capabilities":["live_bbo"]}
+    ],"discovery":[]},
+    {"id":"futures","default_symbol":"BTC-USDT","symbol_format":"{base}-{quote}","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"api.hbdm.com","port":443,"path":"/linear-swap-ws","subscribe":"{\"sub\":\"market.{symbol}.trade.detail\",\"id\":\"probe\"}","compression":"gzip","capabilities":["live_trades"]},
+      {"id":"orderbook","kind":"depth","support":"observed_only","transport":"ws","wire":"json","host":"api.hbdm.com","port":443,"path":"/linear-swap-ws","subscribe":"{\"sub\":\"market.{symbol}.depth.size_20.high_freq\",\"data_type\":\"incremental\",\"id\":\"probe\"}","compression":"gzip","depth_semantics":"stream_snapshot_delta","depth_levels":20,"capabilities":["live_l2"]}
+    ],"discovery":[]}
+  ]
+}

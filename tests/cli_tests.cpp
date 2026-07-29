@@ -56,7 +56,7 @@ int main() {
   require(latency.options.route_mode == RouteMode::Both,
           "explicit both routes");
 
-  require(!parse({"probe", "audit"}).ok, "audit source required");
+  require(!parse({"probe", "audit"}).ok, "removed audit command rejected");
   require(!parse({"probe", "sandbox"}).ok, "sandbox file required");
   require(
       parse({"probe", "latency", "--surface", "private",
@@ -97,6 +97,34 @@ int main() {
   require(
       parse({"probe", "compare", "--input", "one", "--input", "two"}).ok,
       "compare inputs");
+  const auto profile =
+      parse({"probe", "profile", "search", "--query", "depth"});
+  require(profile.ok && profile.options.command == Command::Profile,
+          "profile search parse");
+  require(profile.options.action == "search" &&
+              profile.options.query == "depth",
+          "profile search arguments");
+  require(
+      parse({"probe", "profile", "promote", "--input", "proposal.json"})
+          .ok,
+      "profile promotion review parse");
+  require(
+      !parse({"probe", "profile", "promote"}).ok,
+      "profile promotion requires proposal");
+  const auto research = parse({
+      "probe", "research", "run", "--venue", "binance", "--product",
+      "futures", "--channel", "trades", "--rounds", "3", "--no-open",
+  });
+  require(research.ok && research.options.command == Command::Research,
+          "research run parse");
+  require(research.options.channels == std::vector<std::string>{"trades"},
+          "research channel");
+  require(!research.options.open_viewer, "research no-open");
+  require(
+      !parse({"probe", "research", "run", "--venue", "binance",
+              "--product", "futures", "--pcap", "--surface", "private"})
+           .ok,
+      "private pcap rejected");
   require(!parse({"probe", "unknown"}).ok, "unknown command rejected");
 
   const auto products = make_profiles();

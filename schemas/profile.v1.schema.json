@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "exchange.api_probe.profile.v1",
+  "title": "Exchange API Probe venue profile",
+  "type": "object",
+  "required": ["schema", "venue", "products"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "exchange.api_probe.profile.v1"},
+    "venue": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+    "display_name": {"type": "string", "maxLength": 128},
+    "provenance": {"enum": ["built_in", "documented", "observed", "candidate"]},
+    "products": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/product"}
+    }
+  },
+  "$defs": {
+    "product": {
+      "type": "object",
+      "required": ["id", "default_symbol", "channels"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+        "default_symbol": {"type": "string", "minLength": 1, "maxLength": 128},
+        "symbol_format": {"type": "string", "maxLength": 128},
+        "channels": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {"$ref": "#/$defs/channel"}
+        },
+        "discovery": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {"$ref": "#/$defs/candidate"}
+        }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "required": ["id", "kind", "support", "transport", "wire", "host", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,95}$"},
+        "name": {"type": "string", "maxLength": 128},
+        "kind": {"enum": ["trade", "book_ticker", "depth", "funding", "control", "unknown"]},
+        "support": {"enum": ["exact", "observed_only", "candidate", "adapter_required", "unavailable"]},
+        "transport": {"enum": ["rest", "ws", "fix", "grpc"]},
+        "wire": {"enum": ["json", "binary_json", "protobuf", "sbe", "fix_sbe", "raw"]},
+        "host": {"type": "string", "minLength": 1, "maxLength": 253},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "path": {"type": "string", "pattern": "^/", "maxLength": 4096},
+        "subscribe": {"type": "string", "maxLength": 65536},
+        "subscribe_binary": {"type": "boolean"},
+        "compression": {"enum": ["none", "gzip", "deflate", "zlib", "permessage_deflate"]},
+        "depth_semantics": {"enum": ["none", "complete_snapshot", "rest_rebase", "stream_snapshot_delta"]},
+        "depth_levels": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "adapter": {"type": "string", "maxLength": 4096},
+        "capabilities": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {"type": "string", "maxLength": 96}
+        },
+        "mapping": {"$ref": "#/$defs/mapping"}
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "data": {"type": "string"},
+        "symbol": {"type": "string"},
+        "event_time": {"type": "string"},
+        "event_time_unit": {"enum": ["ns", "us", "ms", "s"]},
+        "transaction_time": {"type": "string"},
+        "transaction_time_unit": {"enum": ["ns", "us", "ms", "s"]},
+        "event_id": {"type": "string"},
+        "first_event_id": {"type": "string"},
+        "previous_event_id": {"type": "string"},
+        "bids": {"type": "string"},
+        "asks": {"type": "string"},
+        "bid_price": {"type": "string"},
+        "bid_quantity": {"type": "string"},
+        "ask_price": {"type": "string"},
+        "ask_quantity": {"type": "string"},
+        "trades": {"type": "string"},
+        "price": {"type": "string"},
+        "quantity": {"type": "string"},
+        "side": {"type": "string"},
+        "snapshot": {"type": "string"},
+        "snapshot_value": {"type": "string"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": ["id", "host", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,95}$"},
+        "channel": {"type": "string"},
+        "host": {"type": "string"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "path": {"type": "string", "pattern": "^/"},
+        "subscribe": {"type": "string", "maxLength": 65536},
+        "subscribe_binary": {"type": "boolean"},
+        "provenance": {"enum": ["documented", "observed", "candidate"]},
+        "note": {"type": "string", "maxLength": 1024}
+      }
+    }
+  }
+}

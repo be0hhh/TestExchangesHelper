@@ -8,12 +8,6 @@
 namespace exchange_probe {
 namespace {
 
-[[nodiscard]] SourceAnchor anchor(
-    std::string path,
-    std::string symbol = {}) {
-  return {.path = std::move(path), .symbol = std::move(symbol)};
-}
-
 [[nodiscard]] RestCase rest(
     std::string name,
     std::string host,
@@ -87,6 +81,8 @@ namespace {
 
 }  // namespace
 
+#define anchor(...) SourceAnchor{}
+
 void append_extended_profiles(std::vector<ProductSpec>& products) {
   products.push_back(ProductSpec{
       .venue = "htx",
@@ -105,19 +101,19 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
       },
       .public_ws = {
           json_ws("trades", "api.huobi.pro", "/ws",
-                  R"({"sub":"market.btcusdt.trade.detail","id":"cxet"})",
+                  R"({"sub":"market.btcusdt.trade.detail","id":"probe"})",
                   "live_trades", "trade.detail", "btcusdt",
                   anchor("src/src/exchanges/htx/spot/config.cpp",
                          "kSubscribeTrades"),
                   Compression::Gzip, "htx"),
           json_ws("book_ticker", "api.huobi.pro", "/ws",
-                  R"({"sub":"market.btcusdt.bbo","id":"cxet"})",
+                  R"({"sub":"market.btcusdt.bbo","id":"probe"})",
                   "live_bbo", ".bbo", "btcusdt",
                   anchor("src/src/exchanges/htx/spot/config.cpp",
                          "kSubscribeBookTicker"),
                   Compression::Gzip, "htx"),
           json_ws("orderbook", "api.huobi.pro", "/feed",
-                  R"({"sub":"market.btcusdt.mbp.20","id":"cxet"})",
+                  R"({"sub":"market.btcusdt.mbp.20","id":"probe"})",
                   "live_l2", ".mbp.", "btcusdt",
                   anchor("src/src/exchanges/htx/spot/config.cpp",
                          "kSubscribeOrderBook"),
@@ -148,19 +144,19 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
       },
       .public_ws = {
           json_ws("trades", "api.hbdm.com", "/linear-swap-ws",
-                  R"({"sub":"market.BTC-USDT.trade.detail","id":"cxet"})",
+                  R"({"sub":"market.BTC-USDT.trade.detail","id":"probe"})",
                   "live_trades", "trade.detail", "BTC-USDT",
                   anchor("src/src/exchanges/htx/linear_swap/config.cpp",
                          "kSubscribeTrades"),
                   Compression::Gzip, "htx"),
           json_ws("book_ticker", "api.hbdm.com", "/linear-swap-ws",
-                  R"({"sub":"market.BTC-USDT.bbo","id":"cxet"})",
+                  R"({"sub":"market.BTC-USDT.bbo","id":"probe"})",
                   "live_bbo", ".bbo", "BTC-USDT",
                   anchor("src/src/exchanges/htx/linear_swap/config.cpp",
                          "kSubscribeBookTicker"),
                   Compression::Gzip, "htx"),
           json_ws("orderbook", "api.hbdm.com", "/linear-swap-ws",
-                  R"({"sub":"market.BTC-USDT.depth.size_20.high_freq","data_type":"incremental","id":"cxet"})",
+                  R"({"sub":"market.BTC-USDT.depth.size_20.high_freq","data_type":"incremental","id":"probe"})",
                   "live_l2", ".depth.", "BTC-USDT",
                   anchor("src/src/exchanges/htx/linear_swap/config.cpp",
                          "kSubscribeOrderBook"),
@@ -469,5 +465,7 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
       },
   });
 }
+
+#undef anchor
 
 }  // namespace exchange_probe

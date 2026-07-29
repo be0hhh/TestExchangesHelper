@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 project(exchange_api_probe VERSION 3.0.0 LANGUAGES CXX)
 
+include(GNUInstallDirs)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -13,7 +15,6 @@ find_package(Boost REQUIRED COMPONENTS json)
 
 add_library(exchange_probe_lib
     src/application.cpp
-    src/audit.cpp
     src/cli.cpp
     src/compare.cpp
     src/contracts.cpp
@@ -31,11 +32,21 @@ add_library(exchange_probe_lib
     src/profiles_misc.cpp
     src/probe_runner.cpp
     src/redaction.cpp
+    src/research.cpp
+    src/research_analysis.cpp
+    src/research_capture.cpp
+    src/research_commands.cpp
+    src/research_profile.cpp
     src/sandbox.cpp
+    src/viewer_server.cpp
     src/ws_client.cpp
 )
 
 target_include_directories(exchange_probe_lib PUBLIC include)
+target_compile_definitions(exchange_probe_lib PRIVATE
+    EXCHANGE_PROBE_SOURCE_PROFILE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/profiles"
+    EXCHANGE_PROBE_INSTALL_PROFILE_ROOT="${CMAKE_INSTALL_FULL_DATADIR}/exchange-api-probe/profiles"
+)
 target_link_libraries(exchange_probe_lib
     PUBLIC
         OpenSSL::Crypto
@@ -84,15 +95,21 @@ if(BUILD_TESTING)
     target_link_libraries(exchange-probe-gzip-tests PRIVATE exchange_probe_lib)
     add_test(NAME exchange-probe-gzip-tests COMMAND exchange-probe-gzip-tests)
 
-    add_executable(exchange-probe-audit-tests tests/audit_tests.cpp)
-    target_link_libraries(exchange-probe-audit-tests PRIVATE exchange_probe_lib)
-    add_test(NAME exchange-probe-audit-tests COMMAND exchange-probe-audit-tests)
-
     add_executable(exchange-probe-compare-tests tests/compare_tests.cpp)
     target_link_libraries(exchange-probe-compare-tests PRIVATE exchange_probe_lib)
     add_test(NAME exchange-probe-compare-tests COMMAND exchange-probe-compare-tests)
+
+    add_executable(exchange-probe-research-tests tests/research_tests.cpp)
+    target_link_libraries(exchange-probe-research-tests PRIVATE exchange_probe_lib)
+    target_compile_definitions(exchange-probe-research-tests PRIVATE
+        EXCHANGE_PROBE_TEST_PROFILE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/profiles"
+    )
+    add_test(NAME exchange-probe-research-tests COMMAND exchange-probe-research-tests)
 
     add_test(NAME binance-ws-race-self-test COMMAND binance-ws-race --self-test)
 endif()
 
 install(TARGETS exchange-api-probe RUNTIME DESTINATION bin)
+install(DIRECTORY profiles schemas DESTINATION share/exchange-api-probe)
+install(FILES doc/ADAPTER_PROTOCOL.md
+    DESTINATION share/doc/exchange-api-probe)

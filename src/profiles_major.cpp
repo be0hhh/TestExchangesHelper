@@ -4,6 +4,11 @@
 namespace exchange_probe {
 using namespace profile_factory;
 
+// Legacy call sites retain provenance arguments for review history, but the
+// standalone tool neither stores nor resolves paths outside this repository.
+#define anchor(...) SourceAnchor{}
+#define credential_anchor(...) SourceAnchor{}
+
 void append_major_profiles(std::vector<ProductSpec>& products) {
   products.push_back(ProductSpec{
       .venue = "binance",
@@ -726,7 +731,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
           kucoin_ws(
               "trades",
               "x-push-spot.kucoin.com",
-              R"({"id":"cxet-kucoin-1","action":"SUBSCRIBE","channel":"trade","tradeType":"SPOT","symbol":"BTC-USDT"})",
+              R"({"id":"probe-kucoin-1","action":"SUBSCRIBE","channel":"trade","tradeType":"SPOT","symbol":"BTC-USDT"})",
               {"live_trades"},
               "trade",
               "BTC-USDT",
@@ -736,7 +741,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
           kucoin_ws(
               "book_ticker",
               "x-push-spot.kucoin.com",
-              R"({"id":"cxet-kucoin-1","action":"SUBSCRIBE","channel":"obu","tradeType":"SPOT","symbol":"BTC-USDT","depth":"1","rpiFilter":0})",
+              R"({"id":"probe-kucoin-1","action":"SUBSCRIBE","channel":"obu","tradeType":"SPOT","symbol":"BTC-USDT","depth":"1","rpiFilter":0})",
               {"live_bbo"},
               "obu",
               "BTC-USDT",
@@ -840,7 +845,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
           kucoin_ws(
               "trades",
               "x-push-futures.kucoin.com",
-              R"({"id":"cxet-kucoin-1","action":"SUBSCRIBE","channel":"trade","tradeType":"FUTURES","symbol":"XBTUSDTM"})",
+              R"({"id":"probe-kucoin-1","action":"SUBSCRIBE","channel":"trade","tradeType":"FUTURES","symbol":"XBTUSDTM"})",
               {"live_trades"},
               "trade",
               "XBTUSDTM",
@@ -850,7 +855,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
           kucoin_ws(
               "funding",
               "x-push-futures.kucoin.com",
-              R"({"id":"cxet-kucoin-1","action":"SUBSCRIBE","channel":"funding-fee","symbol":"XBTUSDTM"})",
+              R"({"id":"probe-kucoin-1","action":"SUBSCRIBE","channel":"funding-fee","symbol":"XBTUSDTM"})",
               {"funding_current_symbol"},
               "funding-fee",
               "XBTUSDTM",
@@ -1021,5 +1026,8 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
   });
 
 }
+
+#undef credential_anchor
+#undef anchor
 
 }  // namespace exchange_probe

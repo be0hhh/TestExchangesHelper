@@ -22,7 +22,7 @@ namespace {
 
 inline constexpr std::size_t kMaxCompareFileBytes = 8U * 1024U * 1024U;
 inline constexpr std::string_view kBundleSchema =
-    "cxet.exchange_probe.bundle.v2";
+    "exchange.api_probe.bundle.v2";
 
 struct Candidate {
   std::filesystem::path bundle;
@@ -315,7 +315,7 @@ int run_compare(
     rows.emplace_back(candidate_json(candidate));
   }
   boost::json::object comparison{
-      {"schema", "cxet.exchange_probe.compare.v1"},
+      {"schema", "exchange.api_probe.compare.v1"},
       {"schema_version", 1},
       {"owner", owner},
       {"selection_policy", "pareto_no_automatic_winner"},

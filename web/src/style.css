@@ -1,0 +1,28 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  background: #0b1020;
+  color: #e7ecf5;
+}
+
+body { margin: 0; }
+header { display: flex; align-items: center; gap: 24px; padding: 12px 20px; }
+header h1 { font-size: 19px; }
+input, button {
+  color: inherit;
+  background: #11182a;
+  border: 1px solid #34415f;
+  border-radius: 7px;
+  padding: 9px;
+}
+main { display: grid; grid-template-columns: 280px 1fr; min-height: 90vh; }
+aside { border-right: 1px solid #26314c; padding: 12px; }
+aside button { display: block; width: 100%; text-align: left; margin-bottom: 8px; }
+section { padding: 18px; }
+#timeline, pre {
+  margin-top: 18px;
+  padding: 12px;
+  background: #080d19;
+  border: 1px solid #26314c;
+  border-radius: 8px;
+}

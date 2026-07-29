@@ -125,7 +125,7 @@ namespace exchange_probe::profile_factory {
       .data_kind = WsDataKind::KucoinBinaryJson,
       .expected_symbol = std::move(expected_symbol),
       .expected_topic = std::move(expected_topic),
-      .expected_request_id = "cxet-kucoin-1",
+      .expected_request_id = "probe-kucoin-1",
       .subscribe_binary = true,
       .inbound_binary = true,
       .read_welcome = true,

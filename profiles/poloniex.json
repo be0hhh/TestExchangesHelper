@@ -1,0 +1,13 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"poloniex","display_name":"Poloniex","provenance":"built_in",
+  "products":[
+    {"id":"spot","default_symbol":"BTC_USDT","symbol_format":"{base}_{quote}","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"ws.poloniex.com","port":443,"path":"/ws/public","subscribe":"{\"event\":\"subscribe\",\"channel\":[\"trades\"],\"symbols\":[\"{symbol}\"]}","compression":"none","capabilities":["live_trades"]},
+      {"id":"orderbook","kind":"depth","support":"observed_only","transport":"ws","wire":"json","host":"ws.poloniex.com","port":443,"path":"/ws/public","subscribe":"{\"event\":\"subscribe\",\"channel\":[\"book_lv2\"],\"symbols\":[\"{symbol}\"]}","compression":"none","depth_semantics":"stream_snapshot_delta","capabilities":["live_l2"]}
+    ],"discovery":[]},
+    {"id":"futures","default_symbol":"BTC_USDT_PERP","symbol_format":"venue_native","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"ws.poloniex.com","port":443,"path":"/ws/v3/public","subscribe":"{\"event\":\"subscribe\",\"channel\":[\"trades\"],\"symbols\":[\"{symbol}\"]}","compression":"none","capabilities":["live_trades"]},
+      {"id":"orderbook","kind":"depth","support":"observed_only","transport":"ws","wire":"json","host":"ws.poloniex.com","port":443,"path":"/ws/v3/public","subscribe":"{\"event\":\"subscribe\",\"channel\":[\"book_lv2\"],\"symbols\":[\"{symbol}\"]}","compression":"none","depth_semantics":"stream_snapshot_delta","capabilities":["live_l2"]}
+    ],"discovery":[]}
+  ]
+}

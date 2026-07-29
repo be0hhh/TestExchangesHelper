@@ -1,0 +1,13 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"toobit","display_name":"Toobit","provenance":"built_in",
+  "products":[
+    {"id":"spot","default_symbol":"BTCUSDT","symbol_format":"{base}{quote}","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"stream.toobit.com","port":443,"path":"/quote/ws/v1","subscribe":"{\"symbol\":\"{symbol}\",\"topic\":\"trade\",\"event\":\"sub\",\"params\":{\"binary\":false}}","compression":"none","capabilities":["live_trades"]},
+      {"id":"orderbook","kind":"depth","support":"observed_only","transport":"ws","wire":"json","host":"stream.toobit.com","port":443,"path":"/quote/ws/v1","subscribe":"{\"symbol\":\"{symbol}\",\"topic\":\"diffDepth\",\"event\":\"sub\",\"params\":{\"binary\":false}}","compression":"none","depth_semantics":"stream_snapshot_delta","capabilities":["live_l2"]}
+    ],"discovery":[]},
+    {"id":"futures","default_symbol":"BTC-SWAP-USDT","symbol_format":"venue_native","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"stream.toobit.com","port":443,"path":"/quote/ws/v1","subscribe":"{\"symbol\":\"{symbol}\",\"topic\":\"trade\",\"event\":\"sub\",\"params\":{\"binary\":false}}","compression":"none","capabilities":["live_trades"]},
+      {"id":"book_ticker","kind":"book_ticker","support":"observed_only","transport":"ws","wire":"json","host":"stream.toobit.com","port":443,"path":"/quote/ws/v1","subscribe":"{\"symbol\":\"{symbol}\",\"topic\":\"bookTicker\",\"event\":\"sub\",\"params\":{\"binary\":false}}","compression":"none","depth_levels":1,"capabilities":["live_bbo"]}
+    ],"discovery":[]}
+  ]
+}

@@ -57,6 +57,19 @@ int run_application(
     return 0;
   }
 
+  if (options.command == Command::Profile) {
+    return run_profile_command(options, output, error_output);
+  }
+  if (options.command == Command::Discover) {
+    return run_discovery(options, output, error_output);
+  }
+  if (options.command == Command::Research) {
+    return run_research(options, output, error_output);
+  }
+  if (options.command == Command::Serve) {
+    return run_viewer(options, output, error_output);
+  }
+
   auto profiles = make_profiles();
   if (options.command == Command::Latency) {
     return run_latency(options, output, error_output);
@@ -70,13 +83,6 @@ int run_application(
   if (options.command == Command::Placement) {
     return run_placement(options, output, error_output);
   }
-  if (options.command == Command::Audit) {
-    const auto audit = audit_profiles(profiles, *options.source_root);
-    const bool ok = audit.at("ok").as_bool();
-    emit_audit(audit, options.jsonl, output);
-    return ok ? 0 : 1;
-  }
-
   std::optional<ProductSpec> sandbox;
   std::vector<const ProductSpec*> selected;
   if (options.command == Command::Sandbox) {

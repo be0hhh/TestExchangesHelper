@@ -1,0 +1,7 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"hyperliquid","display_name":"Hyperliquid","provenance":"built_in",
+  "products":[{"id":"futures","default_symbol":"BTC","symbol_format":"base_only","channels":[
+    {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"api.hyperliquid.xyz","port":443,"path":"/ws","subscribe":"{\"method\":\"subscribe\",\"subscription\":{\"type\":\"trades\",\"coin\":\"{symbol}\"}}","compression":"none","capabilities":["live_trades"]},
+    {"id":"orderbook","kind":"depth","support":"observed_only","transport":"ws","wire":"json","host":"api.hyperliquid.xyz","port":443,"path":"/ws","subscribe":"{\"method\":\"subscribe\",\"subscription\":{\"type\":\"l2Book\",\"coin\":\"{symbol}\"}}","compression":"none","depth_semantics":"complete_snapshot","capabilities":["live_l2"]}
+  ],"discovery":[]}]
+}

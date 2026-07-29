@@ -2,6 +2,7 @@
 
 #include "exchange_probe/credentials.hpp"
 #include "exchange_probe/model.hpp"
+#include "exchange_probe/research_profile.hpp"
 
 #include <filesystem>
 #include <iosfwd>
@@ -14,12 +15,15 @@ namespace exchange_probe {
 enum class Command {
   Help,
   Matrix,
-  Audit,
   Latency,
   Stability,
   Compare,
   Sandbox,
   Placement,
+  Profile,
+  Discover,
+  Research,
+  Serve,
 };
 
 enum class PlacementMode {
@@ -52,7 +56,6 @@ struct CliOptions {
   std::vector<std::string> cases;
   std::optional<Surface> surface;
   std::optional<Transport> transport;
-  std::optional<std::filesystem::path> source_root;
   std::optional<std::filesystem::path> sandbox_file;
   std::optional<std::filesystem::path> env_file;
   RunLimits limits;
@@ -68,6 +71,17 @@ struct CliOptions {
   std::vector<std::filesystem::path> inputs;
   std::vector<std::string> geo_providers;
   std::optional<std::filesystem::path> geo_cache;
+  std::filesystem::path profile_root{"profiles"};
+  std::string action;
+  std::string query;
+  std::string symbol;
+  std::vector<std::string> channels;
+  unsigned rounds{3U};
+  bool open_viewer{true};
+  bool allow_adapter{false};
+  bool allow_private_adapter{false};
+  bool capture_pcap{false};
+  bool capture_tls_keys{false};
   bool jsonl{false};
   bool confirm_private{false};
   bool confirm_session_lifecycle{false};
@@ -113,10 +127,6 @@ void print_help(std::ostream& output);
     const ProductSpec& product,
     const CapabilityRow& capability);
 
-[[nodiscard]] boost::json::object audit_profiles(
-    const std::vector<ProductSpec>& products,
-    const std::filesystem::path& source_root);
-
 [[nodiscard]] std::optional<ProductSpec> load_sandbox_profile(
     const std::filesystem::path& path,
     std::string& error);
@@ -128,10 +138,6 @@ void emit_observations(
     std::ostream& output);
 void emit_matrix(
     const std::vector<const ProductSpec*>& products,
-    bool jsonl,
-    std::ostream& output);
-void emit_audit(
-    const boost::json::object& audit,
     bool jsonl,
     std::ostream& output);
 
@@ -156,6 +162,26 @@ void emit_audit(
     std::ostream& error_output);
 
 [[nodiscard]] int run_compare(
+    const CliOptions& options,
+    std::ostream& output,
+    std::ostream& error_output);
+
+[[nodiscard]] int run_profile_command(
+    const CliOptions& options,
+    std::ostream& output,
+    std::ostream& error_output);
+
+[[nodiscard]] int run_discovery(
+    const CliOptions& options,
+    std::ostream& output,
+    std::ostream& error_output);
+
+[[nodiscard]] int run_research(
+    const CliOptions& options,
+    std::ostream& output,
+    std::ostream& error_output);
+
+[[nodiscard]] int run_viewer(
     const CliOptions& options,
     std::ostream& output,
     std::ostream& error_output);

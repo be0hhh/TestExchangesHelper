@@ -1,0 +1,6 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"aster","display_name":"Aster","provenance":"built_in",
+  "products":[{"id":"futures","default_symbol":"btcusdt","symbol_format":"{base}{quote}:lower","channels":[
+    {"id":"funding","kind":"funding","support":"observed_only","transport":"ws","wire":"json","host":"fstream.asterdex.com","port":443,"path":"/ws/{symbol}@markPrice@1s","subscribe":"","compression":"none","capabilities":["funding"]}
+  ],"discovery":[]}]
+}

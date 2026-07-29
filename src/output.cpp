@@ -84,7 +84,6 @@ boost::json::object capability_json(
       {"wire", to_string(capability.wire)},
       {"selection", to_string(capability.selection)},
       {"profile_status", to_string(capability.profile_status)},
-      {"core_status", to_string(capability.core_status)},
       {"requires_confirmation", capability.requires_confirmation},
       {"native", capability.native},
   };
@@ -200,31 +199,6 @@ void emit_matrix(
     }
     if (!product->notes.empty()) {
       output << "  notes: " << joined(product->notes, "; ") << '\n';
-    }
-  }
-}
-
-void emit_audit(
-    const boost::json::object& audit,
-    bool jsonl,
-    std::ostream& output) {
-  if (jsonl) {
-    emit_json_line(audit, output);
-    return;
-  }
-  const auto summary = audit.if_contains("summary");
-  output << "source audit: "
-         << (audit.at("ok").as_bool() ? "PASS" : "FAIL") << '\n';
-  if (summary != nullptr && summary->is_object()) {
-    for (const auto& item : summary->as_object()) {
-      output << "  " << item.key() << ": "
-             << boost::json::serialize(item.value()) << '\n';
-    }
-  }
-  if (const auto* issues = audit.if_contains("issues");
-      issues != nullptr && issues->is_array()) {
-    for (const auto& issue : issues->as_array()) {
-      output << "  - " << boost::json::serialize(issue) << '\n';
     }
   }
 }

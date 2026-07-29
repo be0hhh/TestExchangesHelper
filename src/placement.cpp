@@ -416,12 +416,6 @@ int run_placement(const CliOptions& options,
                   std::ostream& output,
                   std::ostream& error_output) {
   const auto profiles = make_profiles();
-  bool audit_ok = true;
-  if (options.source_root.has_value()) {
-    const auto audit = audit_profiles(profiles, *options.source_root);
-    audit_ok = audit.at("ok").as_bool();
-    emit(output, {{"kind", "placement_source_audit"}, {"audit", audit}});
-  }
   const auto selected = select_products(profiles, options);
   if (selected.empty()) {
     error_output << "configuration_error: filters selected no products\n";
@@ -602,7 +596,7 @@ int run_placement(const CliOptions& options,
       }
     }
   }
-  return audit_ok ? 0 : 1;
+  return 0;
 }
 
 }  // namespace exchange_probe

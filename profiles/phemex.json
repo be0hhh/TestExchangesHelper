@@ -1,0 +1,8 @@
+{
+  "schema":"exchange.api_probe.profile.v1","venue":"phemex","display_name":"Phemex","provenance":"built_in",
+  "products":[{"id":"futures","default_symbol":"BTCUSDT","symbol_format":"{base}{quote}","channels":[
+    {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"ws.phemex.com","port":443,"path":"/","subscribe":"{\"id\":0,\"method\":\"trade_p.subscribe\",\"params\":[\"{symbol}\"]}","compression":"none","capabilities":["live_trades"]},
+    {"id":"book_ticker","kind":"book_ticker","support":"observed_only","transport":"ws","wire":"json","host":"ws.phemex.com","port":443,"path":"/","subscribe":"{\"id\":0,\"method\":\"orderbook_p.subscribe\",\"params\":[\"{symbol}\",false,1]}","compression":"none","depth_levels":1,"capabilities":["live_bbo"]},
+    {"id":"orderbook","kind":"depth","support":"observed_only","transport":"ws","wire":"json","host":"ws.phemex.com","port":443,"path":"/","subscribe":"{\"id\":0,\"method\":\"orderbook_p.subscribe\",\"params\":[\"{symbol}\",false,30]}","compression":"none","depth_semantics":"stream_snapshot_delta","depth_levels":30,"capabilities":["live_l2"]}
+  ],"discovery":[]}]
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "exchange.api_probe.profile.v1", "venue": "gate",
+  "display_name": "Gate", "provenance": "built_in",
+  "products": [
+    {"id":"spot","default_symbol":"BTC_USDT","symbol_format":"{base}_{quote}","channels":[
+      {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"api.gateio.ws","port":443,"path":"/ws/v4/","subscribe":"{\"time\":1,\"channel\":\"spot.trades\",\"event\":\"subscribe\",\"payload\":[\"{symbol}\"]}","compression":"none","capabilities":["live_trades"]}
+    ],"discovery":[]},
+    {"id":"futures","default_symbol":"BTC_USDT","symbol_format":"{base}_{quote}","channels":[
+      {"id":"trades_sbe","kind":"trade","support":"adapter_required","transport":"ws","wire":"sbe","host":"fx-ws.gateio.ws","port":443,"path":"/v4/ws/usdt","subscribe":"","subscribe_binary":true,"compression":"none","adapter":"adapters/gate_sbe","capabilities":["live_trades"]},
+      {"id":"book_ticker_sbe","kind":"book_ticker","support":"adapter_required","transport":"ws","wire":"sbe","host":"fx-ws.gateio.ws","port":443,"path":"/v4/ws/usdt","subscribe":"","subscribe_binary":true,"compression":"none","adapter":"adapters/gate_sbe","depth_levels":1,"capabilities":["live_bbo"]},
+      {"id":"orderbook_sbe","kind":"depth","support":"adapter_required","transport":"ws","wire":"sbe","host":"fx-ws.gateio.ws","port":443,"path":"/v4/ws/usdt","subscribe":"","subscribe_binary":true,"compression":"none","adapter":"adapters/gate_sbe","depth_semantics":"stream_snapshot_delta","depth_levels":50,"capabilities":["live_l2"]}
+    ],"discovery":[]}
+  ]
+}

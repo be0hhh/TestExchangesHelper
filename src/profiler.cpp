@@ -37,7 +37,7 @@ namespace exchange_probe {
 namespace {
 
 inline constexpr std::string_view kBundleSchema =
-    "cxet.exchange_probe.bundle.v2";
+    "exchange.api_probe.bundle.v2";
 inline constexpr std::string_view kPercentileMethod =
     "bounded_log16_subbucket_histogram_upper_bound";
 inline constexpr std::size_t kHistogramLinearBuckets = 16U;

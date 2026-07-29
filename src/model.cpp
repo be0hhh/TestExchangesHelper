@@ -89,7 +89,7 @@ std::string_view to_string(Wire value) noexcept {
 
 std::string_view to_string(Selection value) noexcept {
   static constexpr std::array names{
-      std::pair{Selection::CoreSelected, std::string_view{"core_selected"}},
+      std::pair{Selection::CoreSelected, std::string_view{"profile_selected"}},
       std::pair{
           Selection::DiagnosticVariant,
           std::string_view{"diagnostic_variant"}},
@@ -110,16 +110,6 @@ std::string_view to_string(ProfileStatus value) noexcept {
       std::pair{
           ProfileStatus::ExternalAdapterRequired,
           std::string_view{"external_adapter_required"}},
-  };
-  return enum_name(value, names, "unknown");
-}
-
-std::string_view to_string(CoreStatus value) noexcept {
-  static constexpr std::array names{
-      std::pair{CoreStatus::NotChecked, std::string_view{"not_checked"}},
-      std::pair{CoreStatus::Confirmed, std::string_view{"confirmed"}},
-      std::pair{CoreStatus::Mismatch, std::string_view{"mismatch"}},
-      std::pair{CoreStatus::NotObserved, std::string_view{"not_observed"}},
   };
   return enum_name(value, names, "unknown");
 }
@@ -229,7 +219,6 @@ void finalize_capabilities(ProductSpec& product) {
               .wire = Wire::Json,
               .selection = probe_case.selection,
               .profile_status = ProfileStatus::Profiled,
-              .core_status = CoreStatus::NotChecked,
               .requires_confirmation = surface == Surface::Private,
               .native = probe_case.native,
           });
@@ -252,7 +241,6 @@ void finalize_capabilities(ProductSpec& product) {
               .wire = probe_case.wire,
               .selection = probe_case.selection,
               .profile_status = ProfileStatus::Profiled,
-              .core_status = CoreStatus::NotChecked,
               .requires_confirmation = false,
               .native = true,
           });
@@ -268,7 +256,6 @@ void finalize_capabilities(ProductSpec& product) {
             .wire = Wire::FixSbe,
             .selection = Selection::ExternalAdapterRequired,
             .profile_status = ProfileStatus::ExternalAdapterRequired,
-            .core_status = CoreStatus::NotChecked,
             .requires_confirmation = false,
             .native = false,
         });
@@ -310,7 +297,6 @@ void finalize_capabilities(ProductSpec& product) {
               .wire = Wire::None,
               .selection = Selection::DiagnosticVariant,
               .profile_status = ProfileStatus::NotProfiled,
-              .core_status = CoreStatus::NotChecked,
               .requires_confirmation = surface == Surface::Private,
               .native = false,
           });
@@ -335,7 +321,6 @@ void finalize_capabilities(ProductSpec& product) {
               .wire = Wire::None,
               .selection = Selection::DiagnosticVariant,
               .profile_status = ProfileStatus::NotApplicable,
-              .core_status = CoreStatus::NotChecked,
               .requires_confirmation = false,
               .native = false,
           });
@@ -356,7 +341,6 @@ void finalize_capabilities(ProductSpec& product) {
             .wire = Wire::None,
             .selection = Selection::DiagnosticVariant,
             .profile_status = ProfileStatus::NotApplicable,
-            .core_status = CoreStatus::NotChecked,
             .requires_confirmation = true,
             .native = false,
         });

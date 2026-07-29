@@ -1,0 +1,109 @@
+{
+  "schema": "exchange.api_probe.profile.v1",
+  "venue": "binance",
+  "display_name": "Binance",
+  "provenance": "built_in",
+  "products": [
+    {
+      "id": "spot",
+      "default_symbol": "btcusdt",
+      "symbol_format": "{base}{quote}:lower",
+      "channels": [
+        {
+          "id": "trades_json", "name": "Raw trades JSON", "kind": "trade",
+          "support": "exact", "transport": "ws", "wire": "json",
+          "host": "stream.binance.com", "port": 443,
+          "path": "/ws/{symbol}@trade", "subscribe": "",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "none", "depth_levels": 0, "adapter": "",
+          "capabilities": ["live_trades"],
+          "mapping": {
+            "data": "$", "symbol": "s", "event_time": "E",
+            "event_time_unit": "ms", "transaction_time": "T",
+            "transaction_time_unit": "ms", "event_id": "t",
+            "price": "p", "quantity": "q", "side": "m"
+          }
+        },
+        {
+          "id": "trades_fix_sbe", "name": "FIX/SBE trades", "kind": "trade",
+          "support": "adapter_required", "transport": "fix", "wire": "fix_sbe",
+          "host": "fix-md.binance.com", "port": 9002, "path": "/",
+          "subscribe": "", "subscribe_binary": true, "compression": "none",
+          "depth_semantics": "none", "depth_levels": 0,
+          "adapter": "adapters/binance_fix_sbe", "capabilities": ["live_trades"]
+        }
+      ],
+      "discovery": [
+        {
+          "id": "agg_trade_stream", "channel": "trades_json",
+          "host": "stream.binance.com", "port": 443,
+          "path": "/ws/{symbol}@aggTrade", "subscribe": "",
+          "subscribe_binary": false, "provenance": "documented",
+          "note": "Compare aggregate and raw trade delivery."
+        }
+      ]
+    },
+    {
+      "id": "futures",
+      "default_symbol": "btcusdt",
+      "symbol_format": "{base}{quote}:lower",
+      "channels": [
+        {
+          "id": "trades", "name": "Raw trades", "kind": "trade",
+          "support": "exact", "transport": "ws", "wire": "json",
+          "host": "fstream.binance.com", "port": 443,
+          "path": "/ws/{symbol}@trade", "subscribe": "",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "none", "depth_levels": 0, "adapter": "",
+          "capabilities": ["live_trades"],
+          "mapping": {
+            "data": "$", "symbol": "s", "event_time": "E",
+            "event_time_unit": "ms", "transaction_time": "T",
+            "transaction_time_unit": "ms", "event_id": "t",
+            "price": "p", "quantity": "q", "side": "m"
+          }
+        },
+        {
+          "id": "book_ticker", "name": "Book ticker", "kind": "book_ticker",
+          "support": "exact", "transport": "ws", "wire": "json",
+          "host": "fstream.binance.com", "port": 443,
+          "path": "/ws/{symbol}@bookTicker", "subscribe": "",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "none", "depth_levels": 1, "adapter": "",
+          "capabilities": ["live_bbo"],
+          "mapping": {
+            "data": "$", "symbol": "s", "event_time": "E",
+            "event_time_unit": "ms", "transaction_time_unit": "ms",
+            "event_id": "u", "bid_price": "b", "bid_quantity": "B",
+            "ask_price": "a", "ask_quantity": "A"
+          }
+        },
+        {
+          "id": "depth_100ms", "name": "Incremental depth 100 ms", "kind": "depth",
+          "support": "observed_only", "transport": "ws", "wire": "json",
+          "host": "fstream.binance.com", "port": 443,
+          "path": "/ws/{symbol}@depth@100ms", "subscribe": "",
+          "subscribe_binary": false, "compression": "none",
+          "depth_semantics": "rest_rebase", "depth_levels": 1000, "adapter": "",
+          "capabilities": ["live_l2"],
+          "mapping": {
+            "data": "$", "symbol": "s", "event_time": "E",
+            "event_time_unit": "ms", "transaction_time": "T",
+            "transaction_time_unit": "ms", "event_id": "u",
+            "first_event_id": "U", "previous_event_id": "pu",
+            "bids": "b", "asks": "a"
+          }
+        }
+      ],
+      "discovery": [
+        {
+          "id": "depth_0ms_candidate", "channel": "depth_100ms",
+          "host": "fstream.binance.com", "port": 443,
+          "path": "/ws/{symbol}@depth@0ms", "subscribe": "",
+          "subscribe_binary": false, "provenance": "candidate",
+          "note": "Bounded candidate for observed update cadence."
+        }
+      ]
+    }
+  ]
+}

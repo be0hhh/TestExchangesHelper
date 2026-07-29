@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "exchange.api_probe.bundle.v3",
+  "title": "Exchange API Probe research bundle manifest",
+  "type": "object",
+  "required": ["schema", "schema_version", "run_id", "owner", "status", "artifact_complete", "clock_domains"],
+  "properties": {
+    "schema": {"const": "exchange.api_probe.bundle.v3"},
+    "schema_version": {"const": 3},
+    "run_id": {"type": "string", "minLength": 1},
+    "owner": {"type": "string"},
+    "status": {"enum": ["running", "complete", "incomplete", "failed"]},
+    "artifact_complete": {"type": "boolean"},
+    "clock_domains": {
+      "type": "object",
+      "required": ["local_monotonic", "local_utc", "exchange_event", "exchange_transaction"],
+      "properties": {
+        "local_monotonic": {"const": "nanoseconds_from_run_start"},
+        "local_utc": {"const": "unix_epoch_nanoseconds"},
+        "exchange_event": {"const": "profile_declared_or_null"},
+        "exchange_transaction": {"const": "profile_declared_or_null"}
+      }
+    }
+  }
+}
