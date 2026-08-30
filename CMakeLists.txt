@@ -73,6 +73,123 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     )
 endif()
 
+if(CXET_EXCHANGE_FEED_RACE_BUILD)
+    if(NOT TARGET cxet::cxet_lib OR NOT TARGET cxet::read_only_contracts)
+        message(FATAL_ERROR
+            "exchange-feed-race requires the CXET root source graph")
+    endif()
+    add_library(exchange_feed_race_lib
+        src/race_analysis.cpp
+        src/race_book.cpp
+        src/race_bitget.cpp
+        src/race_binance.cpp
+        src/race_bybit.cpp
+        src/race_capture.cpp
+        src/race_capture_bitget.cpp
+        src/race_capture_bybit.cpp
+        src/race_catalog.cpp
+        src/race_common.cpp
+        src/race_dashboard.cpp
+        src/race_gate.cpp
+        src/race_ingress.cpp
+        src/race_instruments.cpp
+        src/race_kucoin.cpp
+        src/race_match.cpp
+        src/race_okx.cpp
+        src/race_session.cpp
+        src/race_aster.cpp
+        src/race_report.cpp
+        src/race_svg.cpp
+        src/race_transport.cpp
+        src/race_writer.cpp
+    )
+    target_compile_features(exchange_feed_race_lib PUBLIC cxx_std_23)
+    target_include_directories(exchange_feed_race_lib
+        PUBLIC include
+        PRIVATE src
+    )
+    target_link_libraries(exchange_feed_race_lib
+        PUBLIC
+            exchange_probe_lib
+            cxet::cxet_lib
+            cxet::read_only_contracts
+    )
+    if(TARGET trading_core::algorithm)
+        target_link_libraries(exchange_feed_race_lib PUBLIC trading_core::algorithm)
+        target_compile_definitions(exchange_feed_race_lib
+            PUBLIC EXCHANGE_FEED_RACE_HAS_RECONSTRUCTION=1)
+    else()
+        target_compile_definitions(exchange_feed_race_lib
+            PUBLIC EXCHANGE_FEED_RACE_HAS_RECONSTRUCTION=0)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(exchange_feed_race_lib PRIVATE
+            -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    endif()
+
+    add_library(exchange_bbo_reconstruction_probe_lib
+        src/reconstruction_analysis.cpp
+        src/reconstruction_campaign.cpp
+        src/reconstruction_capture.cpp
+        src/reconstruction_catalog.cpp
+        src/reconstruction_provenance.cpp
+        src/reconstruction_report.cpp
+        src/reconstruction_selection.cpp
+    )
+    target_compile_features(exchange_bbo_reconstruction_probe_lib
+        PUBLIC cxx_std_23)
+    target_include_directories(exchange_bbo_reconstruction_probe_lib
+        PUBLIC include)
+    target_link_libraries(exchange_bbo_reconstruction_probe_lib
+        PUBLIC
+            cxet::cxet_lib
+            cxet::read_only_contracts
+    )
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(exchange_bbo_reconstruction_probe_lib PRIVATE
+            -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    endif()
+
+    add_executable(exchange-bbo-reconstruction-probe
+        src/reconstruction_main.cpp)
+    target_link_libraries(exchange-bbo-reconstruction-probe PRIVATE
+        exchange_bbo_reconstruction_probe_lib)
+
+    add_executable(exchange-bbo-reconstruction-tests
+        tests/reconstruction_tests.cpp)
+    target_link_libraries(exchange-bbo-reconstruction-tests PRIVATE
+        exchange_bbo_reconstruction_probe_lib)
+    add_test(NAME exchange-bbo-reconstruction-tests
+        COMMAND exchange-bbo-reconstruction-tests)
+
+    add_executable(exchange-feed-race-contract-tests tests/race_contract_tests.cpp)
+    target_link_libraries(exchange-feed-race-contract-tests PRIVATE exchange_feed_race_lib)
+    add_test(NAME exchange-feed-race-contract-tests COMMAND exchange-feed-race-contract-tests)
+
+    add_executable(exchange-feed-race-semantics-tests tests/race_semantics_tests.cpp)
+    target_link_libraries(exchange-feed-race-semantics-tests PRIVATE exchange_feed_race_lib)
+    add_test(NAME exchange-feed-race-semantics-tests COMMAND exchange-feed-race-semantics-tests)
+
+    add_executable(exchange-feed-race-catalog-tests tests/race_catalog_tests.cpp)
+    target_link_libraries(exchange-feed-race-catalog-tests PRIVATE exchange_feed_race_lib)
+    add_test(NAME exchange-feed-race-catalog-tests COMMAND exchange-feed-race-catalog-tests)
+
+    add_executable(exchange-feed-race-transport-tests tests/race_transport_tests.cpp)
+    target_link_libraries(exchange-feed-race-transport-tests PRIVATE exchange_feed_race_lib)
+    add_test(NAME exchange-feed-race-transport-tests COMMAND exchange-feed-race-transport-tests)
+
+    add_executable(exchange-feed-race-venue-tests tests/race_venue_tests.cpp)
+    target_link_libraries(exchange-feed-race-venue-tests PRIVATE exchange_feed_race_lib)
+    add_test(NAME exchange-feed-race-venue-tests COMMAND exchange-feed-race-venue-tests)
+
+    add_executable(exchange-feed-race-report-tests tests/race_report_tests.cpp)
+    target_link_libraries(exchange-feed-race-report-tests PRIVATE exchange_feed_race_lib)
+    add_test(NAME exchange-feed-race-report-tests COMMAND exchange-feed-race-report-tests)
+
+    add_executable(exchange-feed-race src/race_main.cpp)
+    target_link_libraries(exchange-feed-race PRIVATE exchange_feed_race_lib)
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
     add_executable(exchange-probe-cli-tests tests/cli_tests.cpp)

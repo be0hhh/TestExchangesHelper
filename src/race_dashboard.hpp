@@ -1,0 +1,14 @@
+#pragma once
+
+#include "exchange_probe/race/analysis.hpp"
+
+#include <filesystem>
+#include <string>
+
+namespace exchange_probe::race {
+
+[[nodiscard]] bool write_race_dashboard(
+    const AnalysisResult& analysis, const std::filesystem::path& directory,
+    std::string& error);
+
+}  // namespace exchange_probe::race

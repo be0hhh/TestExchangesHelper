@@ -142,7 +142,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::BinanceTicker24h,
               "BTCUSDT",
               anchor(
-                  "src/src/exchanges/binance/fapi/reference/ReferenceCatalogV1.hpp")),
+                  "src/src/exchanges/binance/fapi/reference/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "fapi.binance.com",
@@ -304,7 +304,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::BybitTicker24h,
               "BTCUSDT",
               anchor(
-                  "src/src/exchanges/bybit/linear/reference/ReferenceCatalogV1.hpp")),
+                  "src/src/exchanges/bybit/linear/reference/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "api.bybit.com",
@@ -313,7 +313,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::BybitFunding,
               "BTCUSDT",
               anchor(
-                  "src/src/exchanges/bybit/linear/funding/FundingCurrentCatalogV1.hpp")),
+                  "src/src/exchanges/bybit/linear/funding/FundingCurrentCatalog.hpp")),
           std::move(bybit_lowercase),
           public_rest(
               "funding_history",
@@ -465,7 +465,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::OkxTicker24h,
               "BTC-USDT-SWAP",
               anchor(
-                  "src/src/exchanges/okx/swap/reference/ReferenceCatalogV1.hpp")),
+                  "src/src/exchanges/okx/swap/reference/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "www.okx.com",
@@ -474,7 +474,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::OkxFunding,
               "BTC-USDT-SWAP",
               anchor(
-                  "src/src/exchanges/okx/swap/funding/FundingCurrentCatalogV1.hpp")),
+                  "src/src/exchanges/okx/swap/funding/FundingCurrentCatalog.hpp")),
           std::move(okx_lowercase),
           public_rest(
               "funding_history",
@@ -598,7 +598,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::GateTicker24h,
               "BTC_USDT",
               anchor(
-                  "src/src/exchanges/gate/usdt/reference/ReferenceCatalogV1.hpp")),
+                  "src/src/exchanges/gate/usdt/reference/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "api.gateio.ws",
@@ -607,7 +607,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::GateFunding,
               "BTC_USDT",
               anchor(
-                  "src/src/exchanges/gate/usdt/funding/FundingCurrentCatalogV1.hpp")),
+                  "src/src/exchanges/gate/usdt/funding/FundingCurrentCatalog.hpp")),
           std::move(gate_lowercase),
           public_rest(
               "funding_history",
@@ -785,7 +785,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::KucoinTicker24h,
               "XBTUSDTM",
               anchor(
-                  "src/src/exchanges/kucoin/uta/reference/ReferenceCatalogV1.hpp")),
+                  "src/src/exchanges/kucoin/uta/reference/ReferenceCatalog.hpp")),
           std::move(kucoin_lowercase),
           public_rest(
               "public_trades",
@@ -800,7 +800,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::KucoinFunding,
               "XBTUSDTM",
               anchor(
-                  "src/src/exchanges/kucoin/uta/funding/FundingCurrentCatalogV1.hpp")),
+                  "src/src/exchanges/kucoin/uta/funding/FundingCurrentCatalog.hpp")),
           public_rest(
               "funding_history",
               "api-futures.kucoin.com",
@@ -945,7 +945,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::BitgetTicker24h,
               "BTCUSDT",
               anchor(
-                  "src/src/exchanges/bitget/uta/reference/ReferenceCatalogV1.hpp")),
+                  "src/src/exchanges/bitget/uta/reference/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "api.bitget.com",
@@ -954,7 +954,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::BitgetFunding,
               "BTCUSDT",
               anchor(
-                  "src/src/exchanges/bitget/uta/funding/FundingCurrentCatalogV1.hpp")),
+                  "src/src/exchanges/bitget/uta/funding/FundingCurrentCatalog.hpp")),
           public_rest(
               "funding_lowercase",
               "api.bitget.com",
