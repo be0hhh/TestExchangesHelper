@@ -1,21 +1,202 @@
-name: cpp
+name: ci
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  ubuntu:
+  standalone-cpp:
+    name: standalone-cpp
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout probe
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake libboost-all-dev libssl-dev
+          sudo apt-get install --yes \
+            build-essential \
+            cmake \
+            libboost-all-dev \
+            libssl-dev
+
+      - name: Report CMake and CTest binaries
+        run: |
+          /usr/bin/cmake --version
+          /usr/bin/ctest --version
+
       - name: Configure with Unix Makefiles
-        run: cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --parallel 2
-      - name: Offline tests
-        run: ctest --test-dir build --output-on-failure
+        run: >-
+          /usr/bin/cmake
+          -S .
+          -B build
+          -G "Unix Makefiles"
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build standalone probe
+        run: /usr/bin/cmake --build build --parallel 2
+
+      - name: Run standalone offline tests
+        run: /usr/bin/ctest --test-dir build --output-on-failure --no-tests=error
+
+  web:
+    name: web-node-22
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout probe
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Build web viewer
+        working-directory: web
+        run: npm run build
+
+      - name: Test web viewer
+        working-directory: web
+        run: npm test
+
+  private-root-integration:
+    name: private-root-integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Require the private CXETCPP checkout key
+        env:
+          CI_CXETCPP_SSH_KEY: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+        run: |
+          if [[ -z "${CI_CXETCPP_SSH_KEY}" ]]; then
+            echo "::error::CI_CXETCPP_SSH_KEY is required for private CXETCPP integration; fork PRs do not receive this secret."
+            {
+              echo "### Private CXETCPP integration"
+              echo
+              echo ":x: Missing repository secret \`CI_CXETCPP_SSH_KEY\`; the private root graph was not checked out or built."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+      - name: Checkout private CXETCPP family
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/CXETCPP
+          ref: main
+          path: cxet-root
+          ssh-key: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+          submodules: true
+          persist-credentials: false
+
+      - name: Overlay the probe revision under test
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: cxet-root/tools/exchange_api_probe
+          persist-credentials: false
+
+      - name: Verify checkout credentials were removed
+        run: |
+          for repository_path in \
+            "${GITHUB_WORKSPACE}/cxet-root" \
+            "${GITHUB_WORKSPACE}/cxet-root/tools/exchange_api_probe"; do
+            if git -C "${repository_path}" config --local --get-regexp \
+              '^(http\..*\.extraheader|core\.sshCommand)$' >/dev/null 2>&1; then
+              echo "::error::Checkout credentials remain configured in ${repository_path}."
+              exit 1
+            fi
+          done
+
+      - name: Record the integrated revisions
+        run: |
+          root_sha="$(git -C "${GITHUB_WORKSPACE}/cxet-root" rev-parse HEAD)"
+          probe_sha="$(git -C "${GITHUB_WORKSPACE}/cxet-root/tools/exchange_api_probe" rev-parse HEAD)"
+          {
+            echo "### Private CXETCPP integration input"
+            echo
+            echo "- CXETCPP root: \`${root_sha}\`"
+            echo "- Probe requested: \`${GITHUB_SHA}\`"
+            echo "- Probe overlaid: \`${probe_sha}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${probe_sha}" != "${GITHUB_SHA}" ]]; then
+            echo "::error::The overlaid probe SHA does not match github.sha."
+            exit 1
+          fi
+          {
+            echo '```text'
+            git -C "${GITHUB_WORKSPACE}/cxet-root" submodule status
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Install family build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            clang \
+            cmake \
+            libboost-all-dev \
+            libssl-dev \
+            ninja-build \
+            pkg-config
+
+      - name: Report CMake and CTest binaries
+        run: |
+          /usr/bin/cmake --version
+          /usr/bin/ctest --version
+
+      - name: Configure the canonical root graph with probe integration
+        working-directory: cxet-root
+        run: >-
+          /usr/bin/cmake
+          --preset clang-ci-family
+          -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+
+      - name: Build the offline probe integration targets
+        working-directory: cxet-root
+        run: |
+          /usr/bin/cmake --build --preset clang-ci-family \
+            --parallel "$(nproc)" \
+            --target \
+              exchange-bbo-reconstruction-tests \
+              exchange-feed-race-contract-tests \
+              exchange-feed-race-semantics-tests \
+              exchange-feed-race-catalog-tests \
+              exchange-feed-race-transport-tests \
+              exchange-feed-race-venue-tests \
+              exchange-feed-race-report-tests
+
+      - name: Run the offline probe integration tests
+        working-directory: cxet-root
+        run: >-
+          /usr/bin/ctest
+          --test-dir build/modes/clang-ci-family
+          --output-on-failure
+          --no-tests=error
+          --timeout 180
+          --parallel "$(nproc)"
+          --tests-regex
+          '^(exchange-bbo-reconstruction-tests|exchange-feed-race-(contract|semantics|catalog|transport|venue|report)-tests)$'

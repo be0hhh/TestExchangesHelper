@@ -1,5 +1,10 @@
 # exchange-api-probe
 
+[![CI](https://github.com/be0hhh/TestExchangesHelper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/be0hhh/TestExchangesHelper/actions/workflows/ci.yml?query=branch%3Amain)
+
+[Probe Actions](https://github.com/be0hhh/TestExchangesHelper/actions) ·
+[CXETCPP Actions](https://github.com/be0hhh/CXETCPP/actions)
+
 `exchange-api-probe` is an independent Linux C++20 diagnostic for exchange
 HTTP, WebSocket and explicitly enabled read-only private surfaces. It can be
 cloned and built without any parent repository.
@@ -35,6 +40,30 @@ npm run build
 
 Production viewer assets are embedded in the native executable; Node.js is not
 required to inspect a bundle.
+
+## Continuous integration
+
+The `ci.yml` workflow keeps three checks separate:
+
+- `standalone-cpp` builds the independently cloneable C++20 probe and runs its
+  offline CTest suite;
+- `web-node-22` installs the development viewer dependencies, builds the viewer
+  and runs its Vitest suite with Node.js 22;
+- `private-root-integration` checks out the private canonical CXETCPP family,
+  overlays the exact probe revision under test at
+  `tools/exchange_api_probe`, and builds and runs only the offline feed-race and
+  BBO-reconstruction test targets with `CXET_EXCHANGE_FEED_RACE_BUILD=ON`.
+
+The private integration needs the repository secret
+`CI_CXETCPP_SSH_KEY`. It fails with an explicit job summary when that secret is
+missing, including pull requests from forks where repository secrets are
+unavailable. An unavailable integration is not reported as a passing check. It does not run exchange capture, discovery, research, live
+session or other network probe commands.
+
+The web package currently has no committed lockfile, so its CI install uses the
+declared `package.json` ranges and is not fully reproducible. Once a lockfile is
+committed, this job should switch to `npm ci` and enable the setup-node npm
+cache.
 
 ## Profiles
 
