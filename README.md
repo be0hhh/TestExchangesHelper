@@ -6,8 +6,8 @@
 [CXETCPP Actions](https://github.com/be0hhh/CXETCPP/actions)
 
 `exchange-api-probe` is an independent Linux C++20 diagnostic for exchange
-HTTP, WebSocket and explicitly enabled read-only private surfaces. It can be
-cloned and built without any parent repository.
+HTTP, WebSocket and explicitly enabled read-only private surfaces. Its standalone
+build uses the shared Clang 24 toolchain owned by the CXET root.
 
 The tool separates four kinds of evidence:
 
@@ -24,12 +24,18 @@ causality, or production latency.
 
 ## Build
 
+Keep the checkout at `CXETCPP/tools/exchange_api_probe`. Prepare the pinned
+compiler from the root with `python3 tools/Toolchain/BootstrapLlvm.py`, then run
+these commands from the probe directory:
+
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-Dependencies are OpenSSL, Boost.JSON, pthreads and a C++20 compiler. The
+Dependencies are OpenSSL, Boost.JSON, pthreads and the pinned Clang 24 compiling
+C++20. Native CI jobs obtain the shared toolchain from the private CXET root
+using `CI_CXETCPP_SSH_KEY`. The
 optional development viewer uses Node.js:
 
 ```bash

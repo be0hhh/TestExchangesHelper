@@ -16,12 +16,38 @@ jobs:
   standalone-cpp:
     name: standalone-cpp
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 180
 
     steps:
+      - name: Require the canonical toolchain checkout key
+        env:
+          CI_CXETCPP_SSH_KEY: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+        run: |
+          if [ -z "$CI_CXETCPP_SSH_KEY" ]; then
+            echo "::error::CI_CXETCPP_SSH_KEY is required for the canonical compiler pin and bootstrap; fork PRs do not receive this secret."
+            exit 1
+          fi
+
+      - name: Checkout canonical CXET toolchain owner
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/CXETCPP
+          ref: main
+          path: cxet-root
+          ssh-key: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+          submodules: false
+          sparse-checkout: |
+            .github/actions/setup-toolchain
+            cmake
+            tools/Toolchain
+          persist-credentials: false
+
       - name: Checkout probe
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: cxet-root/tools/exchange_api_probe
           persist-credentials: false
 
       - name: Install system dependencies
@@ -29,9 +55,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes \
             build-essential \
+            clang \
             cmake \
+            curl \
+            ninja-build \
+            python3 \
             libboost-all-dev \
             libssl-dev
+
+      - name: Set up pinned LLVM
+        uses: ./cxet-root/.github/actions/setup-toolchain
+        with:
+          source-root: cxet-root
 
       - name: Report CMake and CTest binaries
         run: |
@@ -39,6 +74,7 @@ jobs:
           /usr/bin/ctest --version
 
       - name: Configure with Unix Makefiles
+        working-directory: cxet-root/tools/exchange_api_probe
         run: >-
           /usr/bin/cmake
           -S .
@@ -47,9 +83,11 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
 
       - name: Build standalone probe
+        working-directory: cxet-root/tools/exchange_api_probe
         run: /usr/bin/cmake --build build --parallel 2
 
       - name: Run standalone offline tests
+        working-directory: cxet-root/tools/exchange_api_probe
         run: /usr/bin/ctest --test-dir build --output-on-failure --no-tests=error
 
   web:
@@ -83,7 +121,7 @@ jobs:
   private-root-integration:
     name: private-root-integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - name: Require the private CXETCPP checkout key
@@ -158,10 +196,17 @@ jobs:
             build-essential \
             clang \
             cmake \
+            curl \
+            python3 \
             libboost-all-dev \
             libssl-dev \
             ninja-build \
             pkg-config
+
+      - name: Set up pinned LLVM
+        uses: ./cxet-root/.github/actions/setup-toolchain
+        with:
+          source-root: cxet-root
 
       - name: Report CMake and CTest binaries
         run: |

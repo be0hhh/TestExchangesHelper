@@ -1,0 +1,471 @@
+#include "ProfileBuilders.hpp"
+
+#include <initializer_list>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace exchange_probe {
+namespace {
+
+[[nodiscard]] RestCase rest(
+    std::string name,
+    std::string host,
+    std::string path,
+    std::initializer_list<std::string> capabilities,
+    SourceAnchor core_anchor = {}) {
+  return {
+      .name = std::move(name),
+      .host = std::move(host),
+      .path = std::move(path),
+      .capabilities = {capabilities.begin(), capabilities.end()},
+      .selection = core_anchor.path.empty()
+                       ? Selection::DiagnosticVariant
+                       : Selection::CoreSelected,
+      .core_anchor = std::move(core_anchor),
+  };
+}
+
+[[nodiscard]] WsCase json_ws(
+    std::string name,
+    std::string host,
+    std::string path,
+    std::string subscribe,
+    std::string capability,
+    std::string topic,
+    std::string symbol,
+    SourceAnchor core_anchor,
+    Compression compression = Compression::None,
+    std::string heartbeat = {}) {
+  return {
+      .name = std::move(name),
+      .host = std::move(host),
+      .path = std::move(path),
+      .subscribe = std::move(subscribe),
+      .capabilities = {std::move(capability)},
+      .selection = Selection::CoreSelected,
+      .wire = Wire::Json,
+      .data_kind = WsDataKind::TopicJson,
+      .compression = compression,
+      .expected_symbol = std::move(symbol),
+      .expected_topic = std::move(topic),
+      .require_data = true,
+      .data_implies_ack = true,
+      .application_heartbeat = std::move(heartbeat),
+      .core_anchor = std::move(core_anchor),
+  };
+}
+
+[[nodiscard]] WsCase protobuf_ws(
+    std::string name,
+    std::string subscribe,
+    std::string capability,
+    SourceAnchor core_anchor) {
+  return {
+      .name = std::move(name),
+      .host = "wbs-api.mexc.com",
+      .path = "/ws",
+      .subscribe = std::move(subscribe),
+      .capabilities = {std::move(capability)},
+      .selection = Selection::CoreSelected,
+      .wire = Wire::Protobuf,
+      .data_kind = WsDataKind::ProtobufEnvelope,
+      .expected_symbol = "BTCUSDT",
+      .inbound_binary = true,
+      .require_data = true,
+      .data_implies_ack = true,
+      .core_anchor = core_anchor,
+      .parser_anchor = std::move(core_anchor),
+  };
+}
+
+}  // namespace
+
+#define anchor(...) SourceAnchor{}
+
+void append_extended_profiles(std::vector<ProductSpec>& products) {
+  products.push_back(ProductSpec{
+      .venue = "htx",
+      .product = "spot",
+      .credential_prefix = "HTX_API",
+      .public_rest = {
+          rest("instrument_rules", "api.huobi.pro",
+               "/v1/settings/common/market-symbols",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "api.huobi.pro",
+               "/market/depth?symbol=btcusdt&type=step0&depth=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "api.huobi.pro",
+               "/market/history/trade?symbol=btcusdt&size=10",
+               {"historical_trades"}),
+      },
+      .public_ws = {
+          json_ws("trades", "api.huobi.pro", "/ws",
+                  R"({"sub":"market.btcusdt.trade.detail","id":"probe"})",
+                  "live_trades", "trade.detail", "btcusdt",
+                  anchor("src/src/Core/src/Exchanges/Htx/Spot/Config.cpp",
+                         "kSubscribeTrades"),
+                  Compression::Gzip, "htx"),
+          json_ws("book_ticker", "api.huobi.pro", "/ws",
+                  R"({"sub":"market.btcusdt.bbo","id":"probe"})",
+                  "live_bbo", ".bbo", "btcusdt",
+                  anchor("src/src/Core/src/Exchanges/Htx/Spot/Config.cpp",
+                         "kSubscribeBookTicker"),
+                  Compression::Gzip, "htx"),
+          json_ws("orderbook", "api.huobi.pro", "/feed",
+                  R"({"sub":"market.btcusdt.mbp.20","id":"probe"})",
+                  "live_l2", ".mbp.", "btcusdt",
+                  anchor("src/src/Core/src/Exchanges/Htx/Spot/Config.cpp",
+                         "kSubscribeOrderBook"),
+                  Compression::Gzip, "htx"),
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "htx",
+      .product = "futures",
+      .credential_prefix = "HTX_API",
+      .public_rest = {
+          rest("instrument_rules", "api.hbdm.com",
+               "/linear-swap-api/v1/swap_contract_info",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "api.hbdm.com",
+               "/linear-swap-ex/market/depth?contract_code=BTC-USDT&type=step0",
+               {"rest_orderbook"}),
+          rest("public_trades", "api.hbdm.com",
+               "/linear-swap-ex/market/history/trade?contract_code=BTC-USDT&size=10",
+               {"historical_trades"}),
+          rest("funding_current", "api.hbdm.com",
+               "/linear-swap-api/v1/swap_funding_rate?contract_code=BTC-USDT",
+               {"funding"}),
+          rest("open_interest", "api.hbdm.com",
+               "/linear-swap-api/v1/swap_open_interest?contract_code=BTC-USDT",
+               {"open_interest"}),
+      },
+      .public_ws = {
+          json_ws("trades", "api.hbdm.com", "/linear-swap-ws",
+                  R"({"sub":"market.BTC-USDT.trade.detail","id":"probe"})",
+                  "live_trades", "trade.detail", "BTC-USDT",
+                  anchor("src/src/Core/src/Exchanges/Htx/LinearSwap/Config.cpp",
+                         "kSubscribeTrades"),
+                  Compression::Gzip, "htx"),
+          json_ws("book_ticker", "api.hbdm.com", "/linear-swap-ws",
+                  R"({"sub":"market.BTC-USDT.bbo","id":"probe"})",
+                  "live_bbo", ".bbo", "BTC-USDT",
+                  anchor("src/src/Core/src/Exchanges/Htx/LinearSwap/Config.cpp",
+                         "kSubscribeBookTicker"),
+                  Compression::Gzip, "htx"),
+          json_ws("orderbook", "api.hbdm.com", "/linear-swap-ws",
+                  R"({"sub":"market.BTC-USDT.depth.size_20.high_freq","data_type":"incremental","id":"probe"})",
+                  "live_l2", ".depth.", "BTC-USDT",
+                  anchor("src/src/Core/src/Exchanges/Htx/LinearSwap/Config.cpp",
+                         "kSubscribeOrderBook"),
+                  Compression::Gzip, "htx"),
+      },
+      .notes = {
+          "Funding WebSocket is private in core; public coverage is REST-only.",
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "mexc",
+      .product = "spot",
+      .credential_prefix = "MEXC_API",
+      .public_rest = {
+          rest("instrument_rules", "api.mexc.com", "/api/v3/exchangeInfo",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "api.mexc.com",
+               "/api/v3/depth?symbol=BTCUSDT&limit=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "api.mexc.com",
+               "/api/v3/trades?symbol=BTCUSDT&limit=10",
+               {"historical_trades"}),
+      },
+      .public_ws = {
+          protobuf_ws(
+              "trades",
+              R"({"method":"SUBSCRIPTION","params":["spot@public.aggre.deals.v3.api.pb@10ms@BTCUSDT"],"id":0})",
+              "live_trades",
+              anchor("src/src/Core/src/Exchanges/Mexc/Spot/Config.cpp",
+                     "kSubscribeTrades")),
+          protobuf_ws(
+              "book_ticker",
+              R"({"method":"SUBSCRIPTION","params":["spot@public.aggre.bookTicker.v3.api.pb@10ms@BTCUSDT"],"id":0})",
+              "live_bbo",
+              anchor("src/src/Core/src/Exchanges/Mexc/Spot/Config.cpp",
+                     "kSubscribeBookTicker")),
+          protobuf_ws(
+              "orderbook",
+              R"({"method":"SUBSCRIPTION","params":["spot@public.aggre.depth.v3.api.pb@10ms@BTCUSDT"],"id":0})",
+              "live_l2",
+              anchor("src/src/Core/src/Exchanges/Mexc/Spot/Config.cpp",
+                     "kSubscribeOrderBook")),
+      },
+      .notes = {
+          "The core-selected spot wire is protobuf binary, not JSON.",
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "mexc",
+      .product = "futures",
+      .credential_prefix = "MEXC_API",
+      .public_rest = {
+          rest("instrument_rules", "contract.mexc.com",
+               "/api/v1/contract/detail/country",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "contract.mexc.com",
+               "/api/v1/contract/depth/BTC_USDT?limit=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "contract.mexc.com",
+               "/api/v1/contract/deals/BTC_USDT",
+               {"historical_trades"}),
+      },
+      .public_ws = {
+          json_ws("trades", "contract.mexc.com", "/edge",
+                  R"({"method":"sub.deal","param":{"symbol":"BTC_USDT"},"gzip":false})",
+                  "live_trades", "deal", "BTC_USDT",
+                  anchor("src/src/Core/src/Exchanges/Mexc/Futures/Config.cpp",
+                         "kSubscribeTrades")),
+          json_ws("book_ticker", "contract.mexc.com", "/edge",
+                  R"({"method":"sub.ticker","param":{"symbol":"BTC_USDT"},"gzip":false})",
+                  "live_bbo", "ticker", "BTC_USDT",
+                  anchor("src/src/Core/src/Exchanges/Mexc/Futures/Config.cpp",
+                         "kSubscribeBookTicker")),
+          json_ws("orderbook", "contract.mexc.com", "/edge",
+                  R"({"method":"sub.depth","param":{"symbol":"BTC_USDT"},"gzip":false})",
+                  "live_l2", "depth", "BTC_USDT",
+                  anchor("src/src/Core/src/Exchanges/Mexc/Futures/Config.cpp",
+                         "kSubscribeOrderBook")),
+          json_ws("funding", "contract.mexc.com", "/edge",
+                  R"({"method":"sub.funding.rate","param":{"symbol":"BTC_USDT"},"gzip":false})",
+                  "funding", "funding.rate", "BTC_USDT",
+                  anchor("src/src/Core/src/Exchanges/Mexc/Futures/Config.cpp",
+                         "kSubscribeFunding")),
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "poloniex",
+      .product = "spot",
+      .credential_prefix = "POLONIEX_API",
+      .public_rest = {
+          rest("instrument_rules", "api.poloniex.com", "/markets",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "api.poloniex.com",
+               "/markets/BTC_USDT/orderBook?limit=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "api.poloniex.com",
+               "/markets/BTC_USDT/trades?limit=10",
+               {"historical_trades"}),
+      },
+      .public_ws = {
+          json_ws("trades", "ws.poloniex.com", "/ws/public",
+                  R"({"event":"subscribe","channel":["trades"],"symbols":["BTC_USDT"]})",
+                  "live_trades", "trades", "BTC_USDT",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Spot/Config.cpp",
+                         "kSubscribeTrades")),
+          json_ws("book_ticker", "ws.poloniex.com", "/ws/public",
+                  R"({"event":"subscribe","channel":["book"],"symbols":["BTC_USDT"],"depth":5})",
+                  "live_bbo", "book", "BTC_USDT",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Spot/Config.cpp",
+                         "kSubscribeBookTicker")),
+          json_ws("orderbook", "ws.poloniex.com", "/ws/public",
+                  R"({"event":"subscribe","channel":["book_lv2"],"symbols":["BTC_USDT"]})",
+                  "live_l2", "book_lv2", "BTC_USDT",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Spot/Config.cpp",
+                         "kSubscribeOrderBook")),
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "poloniex",
+      .product = "futures",
+      .credential_prefix = "POLONIEX_API",
+      .public_rest = {
+          rest("instrument_rules", "api.poloniex.com",
+               "/v3/market/allInstruments",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "api.poloniex.com",
+               "/v3/market/orderBook?symbol=BTC_USDT_PERP&limit=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "api.poloniex.com",
+               "/v3/market/trades?symbol=BTC_USDT_PERP&limit=10",
+               {"historical_trades"}),
+      },
+      .public_ws = {
+          json_ws("trades", "ws.poloniex.com", "/ws/v3/public",
+                  R"({"event":"subscribe","channel":["trades"],"symbols":["BTC_USDT_PERP"]})",
+                  "live_trades", "trades", "BTC_USDT_PERP",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Futures/Config.cpp",
+                         "kSubscribeTrades")),
+          json_ws("book_ticker", "ws.poloniex.com", "/ws/v3/public",
+                  R"({"event":"subscribe","channel":["book"],"symbols":["BTC_USDT_PERP"],"depth":5})",
+                  "live_bbo", "book", "BTC_USDT_PERP",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Futures/Config.cpp",
+                         "kSubscribeBookTicker")),
+          json_ws("orderbook", "ws.poloniex.com", "/ws/v3/public",
+                  R"({"event":"subscribe","channel":["book_lv2"],"symbols":["BTC_USDT_PERP"]})",
+                  "live_l2", "book_lv2", "BTC_USDT_PERP",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Futures/Config.cpp",
+                         "kSubscribeOrderBook")),
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "toobit",
+      .product = "spot",
+      .credential_prefix = "TOOBIT_API",
+      .public_rest = {
+          rest("instrument_rules", "api.toobit.com", "/api/v1/exchangeInfo",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "api.toobit.com",
+               "/quote/v1/depth?symbol=BTCUSDT&limit=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "api.toobit.com",
+               "/quote/v1/trades?symbol=BTCUSDT&limit=10",
+               {"historical_trades"}),
+          rest("book_ticker", "api.toobit.com",
+               "/quote/v1/ticker/bookTicker?symbol=BTCUSDT",
+               {"ticker_24h"}),
+      },
+      .public_ws = {
+          json_ws("trades", "stream.toobit.com", "/quote/ws/v1",
+                  R"({"symbol":"BTCUSDT","topic":"trade","event":"sub","params":{"binary":false}})",
+                  "live_trades", "trade", "BTCUSDT",
+                  anchor("src/src/Core/src/Exchanges/Toobit/Spot/Config.cpp",
+                         "kSubscribeTrades")),
+          json_ws("orderbook", "stream.toobit.com", "/quote/ws/v1",
+                  R"({"symbol":"BTCUSDT","topic":"diffDepth","event":"sub","params":{"binary":false}})",
+                  "live_l2", "diffDepth", "BTCUSDT",
+                  anchor("src/src/Core/src/Exchanges/Toobit/Spot/Config.cpp",
+                         "kSubscribeOrderBook")),
+          json_ws("book_ticker", "stream.toobit.com", "/quote/ws/v1",
+                  R"({"symbol":"BTCUSDT","topic":"depth","event":"sub","params":{"binary":false,"limit":1}})",
+                  "live_bbo", "depth", "BTCUSDT",
+                  anchor("src/src/Core/src/Exchanges/Toobit/Spot/Config.cpp",
+                         "kSubscribeBookTicker")),
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "toobit",
+      .product = "futures",
+      .credential_prefix = "TOOBIT_API",
+      .public_rest = {
+          rest("instrument_rules", "api.toobit.com", "/api/v1/exchangeInfo",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "api.toobit.com",
+               "/quote/v1/depth?symbol=BTC-SWAP-USDT&limit=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "api.toobit.com",
+               "/quote/v1/trades?symbol=BTC-SWAP-USDT&limit=10",
+               {"historical_trades"}),
+          rest("book_ticker", "api.toobit.com",
+               "/quote/v1/contract/ticker/bookTicker?symbol=BTC-SWAP-USDT",
+               {"ticker_24h"}),
+          rest("funding_current", "api.toobit.com",
+               "/api/v1/futures/fundingRate?symbol=BTC-SWAP-USDT",
+               {"funding"}),
+          rest("open_interest", "api.toobit.com",
+               "/quote/v1/openInterest?symbol=BTC-SWAP-USDT",
+               {"open_interest"}),
+      },
+      .public_ws = {
+          json_ws("trades", "stream.toobit.com", "/quote/ws/v1",
+                  R"({"symbol":"BTC-SWAP-USDT","topic":"trade","event":"sub","params":{"binary":false}})",
+                  "live_trades", "trade", "BTC-SWAP-USDT",
+                  anchor("src/src/Core/src/Exchanges/Toobit/Futures/Config.cpp",
+                         "kSubscribeTrades")),
+          json_ws("orderbook", "stream.toobit.com", "/quote/ws/v1",
+                  R"({"symbol":"BTC-SWAP-USDT","topic":"diffDepth","event":"sub","params":{"binary":false}})",
+                  "live_l2", "diffDepth", "BTC-SWAP-USDT",
+                  anchor("src/src/Core/src/Exchanges/Toobit/Futures/Config.cpp",
+                         "kSubscribeOrderBook")),
+          json_ws("book_ticker", "stream.toobit.com", "/quote/ws/v1",
+                  R"({"symbol":"BTC-SWAP-USDT","topic":"bookTicker","event":"sub","params":{"binary":false}})",
+                  "live_bbo", "bookTicker", "BTC-SWAP-USDT",
+                  anchor("src/src/Core/src/Exchanges/Toobit/Futures/Config.cpp",
+                         "kSubscribeBookTicker")),
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "xt",
+      .product = "spot",
+      .credential_prefix = "XT_API",
+      .public_rest = {
+          rest("instrument_rules", "sapi.xt.com", "/v4/public/symbol",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "sapi.xt.com",
+               "/v4/public/depth?symbol=btc_usdt&limit=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "sapi.xt.com",
+               "/v4/public/trade/recent?symbol=btc_usdt&limit=10",
+               {"historical_trades"}),
+      },
+      .public_ws = {
+          json_ws("trades", "stream.xt.com", "/public",
+                  R"({"method":"subscribe","params":["trade@btc_usdt"],"id":"1"})",
+                  "live_trades", "trade", "btc_usdt",
+                  anchor("src/src/Core/src/Exchanges/Xt/Spot/Config.cpp",
+                         "kSubscribeTrades")),
+          json_ws("orderbook", "stream.xt.com", "/public",
+                  R"({"method":"subscribe","params":["depth_update@btc_usdt"],"id":"1"})",
+                  "live_l2", "depth_update", "btc_usdt",
+                  anchor("src/src/Core/src/Exchanges/Xt/Spot/Config.cpp",
+                         "kSubscribeOrderBook")),
+          json_ws("book_ticker", "stream.xt.com", "/public",
+                  R"({"method":"subscribe","params":["depth@btc_usdt,5"],"id":"1"})",
+                  "live_bbo", "depth", "btc_usdt",
+                  anchor("src/src/Core/src/Exchanges/Xt/Spot/Config.cpp",
+                         "kSubscribeBookTicker")),
+      },
+  });
+
+  products.push_back(ProductSpec{
+      .venue = "xt",
+      .product = "futures",
+      .credential_prefix = "XT_API",
+      .public_rest = {
+          rest("instrument_rules", "fapi.xt.com",
+               "/future/market/v3/public/symbol/list",
+               {"exchange_info", "instrument_catalog"}),
+          rest("orderbook", "fapi.xt.com",
+               "/future/market/v1/public/q/depth?symbol=btc_usdt&level=20",
+               {"rest_orderbook"}),
+          rest("public_trades", "fapi.xt.com",
+               "/future/market/v1/public/q/deal?symbol=btc_usdt&num=10",
+               {"historical_trades"}),
+      },
+      .public_ws = {
+          json_ws("trades", "fstream.xt.com", "/ws/market",
+                  R"({"method":"SUBSCRIBE","params":["trade@btc_usdt"],"id":"1"})",
+                  "live_trades", "trade", "btc_usdt",
+                  anchor("src/src/Core/src/Exchanges/Xt/Futures/Config.cpp",
+                         "kSubscribeTrades")),
+          json_ws("orderbook", "fstream.xt.com", "/ws/market",
+                  R"({"method":"SUBSCRIBE","params":["depth_update@btc_usdt,100ms"],"id":"1"})",
+                  "live_l2", "depth_update", "btc_usdt",
+                  anchor("src/src/Core/src/Exchanges/Xt/Futures/Config.cpp",
+                         "kSubscribeOrderBook")),
+          json_ws("book_ticker", "fstream.xt.com", "/ws/market",
+                  R"({"method":"SUBSCRIBE","params":["depth@btc_usdt,5,100ms"],"id":"1"})",
+                  "live_bbo", "depth", "btc_usdt",
+                  anchor("src/src/Core/src/Exchanges/Xt/Futures/Config.cpp",
+                         "kSubscribeBookTicker")),
+          json_ws("funding", "fstream.xt.com", "/ws/market",
+                  R"({"method":"SUBSCRIBE","params":["fund_rate@btc_usdt"],"id":"1"})",
+                  "funding", "fund_rate", "btc_usdt",
+                  anchor("src/src/Core/src/Exchanges/Xt/Futures/Config.cpp",
+                         "kSubscribeFunding")),
+      },
+      .notes = {
+          "Core registers funding only on WebSocket; no REST funding route is declared.",
+      },
+  });
+}
+
+#undef anchor
+
+}  // namespace exchange_probe
