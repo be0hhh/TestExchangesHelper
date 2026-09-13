@@ -1,248 +1,456 @@
 name: local-ci
 
 on:
-  push:
-    branches:
-      - main
+  repository_dispatch:
+    types: [family-build]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Build own revision or revalidate dependencies
+        type: choice
+        options: [own, dependency]
+        default: own
 
 permissions:
   contents: read
 
-defaults:
-  run:
-    shell: /home/gha-runner/github-actions/bin/gha-heavy-shell {0}
+concurrency:
+  group: local-ci-${{ github.repository }}-${{ github.event.client_payload.snapshot_id || github.run_id }}
+  cancel-in-progress: true
 
 env:
   CCACHE_DIR: /home/gha-runner/github-actions/cache/ccache
   CCACHE_MAXSIZE: 15G
   CMAKE_BUILD_PARALLEL_LEVEL: 4
   CTEST_PARALLEL_LEVEL: 4
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  PATH: /usr/bin:/bin:/usr/sbin:/sbin
 
 jobs:
-  resolve-family-revisions:
-    name: resolve-family-revisions
-    runs-on: [self-hosted, linux, x64, wsl, benchmark, hft-bench, test-exchanges-helper]
+  snapshot:
+    name: snapshot
+    runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
     timeout-minutes: 10
     outputs:
+      mode: ${{ steps.snapshot.outputs.mode }}
+      snapshot_id: ${{ steps.snapshot.outputs.snapshot_id }}
+      snapshot_json: ${{ steps.snapshot.outputs.snapshot_json }}
       cxetcpp_sha: ${{ steps.snapshot.outputs.cxetcpp_sha }}
+      source_sha: ${{ steps.snapshot.outputs.source_sha }}
     steps:
-      - name: Checkout revision resolver
+      - name: Checkout family revision resolver
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: be0hhh/CXETCPP
           ref: main
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          sparse-checkout: .github/actions/resolve-family-revisions
+          path: controller
+          sparse-checkout: |
+            .github/actions/resolve-family-revisions
+            tools/Ci
           persist-credentials: false
-
-      - name: Snapshot family main revisions
-        id: snapshot
-        uses: ./.github/actions/resolve-family-revisions
+      - name: Resolve current family mains for a manual run
+        if: github.event_name == 'workflow_dispatch'
+        id: fallback
+        uses: ./controller/.github/actions/resolve-family-revisions
         with:
           family-read-token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+      - name: Validate immutable family snapshot
+        id: snapshot
+        env:
+          CLIENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+          MANUAL_MODE: ${{ inputs.mode }}
+          FALLBACK_JSON: >-
+            {"cxetcpp":"${{ steps.fallback.outputs.cxetcpp_sha }}","hft_parser":"${{ steps.fallback.outputs.hft_parser_sha }}","hft_compressor":"${{ steps.fallback.outputs.hft_compressor_sha }}","hft_recorder":"${{ steps.fallback.outputs.hft_recorder_sha }}","trading_core":"${{ steps.fallback.outputs.trading_core_sha }}","hft_trader":"${{ steps.fallback.outputs.hft_trader_sha }}","hft_backtest":"${{ steps.fallback.outputs.hft_backtest_sha }}","trader":"${{ steps.fallback.outputs.trader_sha }}","vetron":"${{ steps.fallback.outputs.vetron_sha }}","test_exchanges_helper":"${{ steps.fallback.outputs.test_exchanges_helper_sha }}"}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, re
+          keys = {"cxetcpp", "hft_parser", "hft_compressor", "hft_recorder", "trading_core", "hft_trader", "hft_backtest", "trader", "vetron", "test_exchanges_helper"}
+          repositories = {"CXETCPP", "TestExchangesHelper", "hft-compressor", "hft-recorder", "hft-parser", "trading-core", "hft-trader", "hft-backtest", "trader", "vetron"}
+          if os.environ["GITHUB_EVENT_NAME"] == "repository_dispatch":
+              payload = json.loads(os.environ["CLIENT_PAYLOAD"])
+              if payload.get("schema_version") != 1:
+                  raise SystemExit("family-build requires schema_version=1")
+              mode, snapshot, snapshot_id = payload.get("mode"), payload.get("snapshot"), payload.get("snapshot_id")
+              if payload.get("trigger_repo") not in repositories or not re.fullmatch(r"[0-9a-f]{40}", str(payload.get("trigger_sha", ""))):
+                  raise SystemExit("family-build contains an invalid trigger")
+          else:
+              mode, snapshot = os.environ.get("MANUAL_MODE") or "own", json.loads(os.environ["FALLBACK_JSON"])
+              relevant = {key: snapshot[key] for key in ("cxetcpp", "test_exchanges_helper")}
+              snapshot_id = hashlib.sha256(json.dumps(relevant, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
+          if mode not in {"own", "dependency"} or not isinstance(snapshot, dict) or set(snapshot) != keys:
+              raise SystemExit("invalid family-build mode or repository set")
+          if any(not isinstance(v, str) or not re.fullmatch(r"[0-9a-f]{40}", v) for v in snapshot.values()):
+              raise SystemExit("family-build contains an invalid SHA")
+          if not isinstance(snapshot_id, str) or not re.fullmatch(r"[0-9a-f]{16}", snapshot_id):
+              raise SystemExit("snapshot_id must be a 16-character lowercase digest")
+          compact = json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"mode={mode}\nsnapshot_id={snapshot_id}\nsnapshot_json={compact}", file=out)
+              print(f"cxetcpp_sha={snapshot['cxetcpp']}\nsource_sha={snapshot['test_exchanges_helper']}", file=out)
+          PY
+      - name: Claim current dispatched snapshot
+        if: github.event_name == 'repository_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          SNAPSHOT_JSON: ${{ steps.snapshot.outputs.snapshot_json }}
+          SNAPSHOT_ID: ${{ steps.snapshot.outputs.snapshot_id }}
+        run: >-
+          python3 controller/tools/Ci/FamilyCiController.py claim
+          --repository "$GITHUB_REPOSITORY" --snapshot-json "$SNAPSHOT_JSON"
+          --snapshot-id "$SNAPSHOT_ID"
 
-  standalone-cpp:
-    name: standalone-cpp
-    needs: resolve-family-revisions
+  prepare:
+    name: prepare-incremental-trees
+    needs: snapshot
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
-    timeout-minutes: 180
-
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: /home/gha-runner/github-actions/bin/gha-heavy-shell {0}
     steps:
-      - name: Checkout canonical CXET toolchain owner
+      - name: Checkout exact family root without cleaning build outputs
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: be0hhh/CXETCPP
-          ref: ${{ needs.resolve-family-revisions.outputs.cxetcpp_sha }}
-          path: cxet-root
+          ref: ${{ needs.snapshot.outputs.cxetcpp_sha }}
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          submodules: false
-          sparse-checkout: |
-            .github/actions/setup-toolchain
-            cmake
-            tools/Toolchain
+          path: source/CXETCPP
+          submodules: true
+          clean: false
           persist-credentials: false
-
-      - name: Checkout probe
+      - name: Overlay exact HFT Parser snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/hft-parser
+          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).hft_parser }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          path: source/CXETCPP/apps/hft-parser
+          clean: false
+          persist-credentials: false
+      - name: Overlay exact Trading Core snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/trading-core
+          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).trading_core }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          path: source/CXETCPP/apps/trading-core
+          clean: false
+          persist-credentials: false
+      - name: Overlay exact Recorder snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/hft-recorder
+          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).hft_recorder }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          path: source/CXETCPP/apps/hft-recorder
+          clean: false
+          persist-credentials: false
+      - name: Overlay exact HFT Trader snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/hft-trader
+          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).hft_trader }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          path: source/CXETCPP/apps/hft-trader
+          clean: false
+          persist-credentials: false
+      - name: Overlay exact HFT Backtest snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/hft-backtest
+          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).hft_backtest }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          path: source/CXETCPP/apps/hft-backtest
+          clean: false
+          persist-credentials: false
+      - name: Overlay exact Trader snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/trader
+          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).trader }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          path: source/CXETCPP/apps/trader
+          clean: false
+          persist-credentials: false
+      - name: Overlay exact Vetron snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/vetron
+          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).vetron }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          path: source/CXETCPP/apps/vetron
+          clean: false
+          persist-credentials: false
+      - name: Overlay exact TestExchangesHelper snapshot
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.sha }}
+          ref: ${{ needs.snapshot.outputs.source_sha }}
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: cxet-root/tools/exchange_api_probe
+          path: source/CXETCPP/tools/exchange_api_probe
+          clean: false
           persist-credentials: false
-
-      - name: Record source revisions
-        run: |
-          {
-            echo '### Source revisions'
-            printf -- '- CXETCPP: `%s`\n' "$(git -C cxet-root rev-parse HEAD)"
-            printf -- '- TestExchangesHelper: `%s`\n' "$(git -C cxet-root/tools/exchange_api_probe rev-parse HEAD)"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-
       - name: Set up pinned LLVM
-        uses: ./cxet-root/.github/actions/setup-toolchain
+        uses: ./source/CXETCPP/.github/actions/setup-toolchain
         with:
-          source-root: cxet-root
+          source-root: source/CXETCPP
           local-cache-root: /home/gha-runner/github-actions/cache/toolchains/wsl-ci-cxetcpp
+      - name: Configure persistent standalone tree
+        working-directory: source/CXETCPP/tools/exchange_api_probe
+        run: /usr/bin/cmake -S . -B build/standalone -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Configure persistent root-integration tree
+        working-directory: source/CXETCPP
+        run: /usr/bin/cmake --preset clang-ci-family-incremental -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
 
-      - name: Report CMake and CTest binaries
-        run: |
-          /usr/bin/cmake --version
-          /usr/bin/ctest --version
-
-      - name: Configure with Unix Makefiles
-        working-directory: cxet-root/tools/exchange_api_probe
-        run: >-
-          /usr/bin/cmake
-          -S .
-          -B build
-          -G "Unix Makefiles"
-          -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build standalone probe
-        working-directory: cxet-root/tools/exchange_api_probe
-        run: /usr/bin/cmake --build build --parallel 2
-
-      - name: Run standalone offline tests
-        working-directory: cxet-root/tools/exchange_api_probe
-        run: /usr/bin/ctest --test-dir build --output-on-failure --no-tests=error
-
-  web:
-    name: web-node-22
-    needs: resolve-family-revisions
+  production-build:
+    name: production-build / standalone
+    if: needs.snapshot.outputs.mode == 'own'
+    needs: [snapshot, prepare]
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
-    timeout-minutes: 15
-
+    timeout-minutes: 120
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
     steps:
-      - name: Checkout probe
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          persist-credentials: false
+      - name: Build standalone production tools
+        working-directory: source/CXETCPP/tools/exchange_api_probe
+        run: /usr/bin/cmake --build build/standalone --target exchange-api-probe binance-ws-race --parallel 4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22
+  root-integration-build:
+    name: root-integration-build / exchange-feed-race
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      (needs.production-build.result == 'success' || needs.production-build.result == 'skipped')
+    needs: [snapshot, prepare, production-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 180
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Build root-integrated probe products
+        working-directory: source/CXETCPP
+        run: >-
+          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4
+          --target exchange-feed-race exchange-bbo-reconstruction-probe
 
-      - name: Install web dependencies
-        working-directory: web
-        run: npm install --ignore-scripts --no-audit --no-fund
+  test-build:
+    name: test-build
+    needs: [snapshot, root-integration-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 180
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Build standalone offline tests
+        working-directory: source/CXETCPP/tools/exchange_api_probe
+        run: >-
+          /usr/bin/cmake --build build/standalone --parallel 4 --target
+          exchange-probe-cli-tests exchange-probe-rest-contract-tests
+          exchange-probe-ws-contract-tests exchange-probe-redaction-tests
+          exchange-probe-gzip-tests exchange-probe-compare-tests
+          exchange-probe-research-tests binance-ws-race
+      - name: Build root integration tests
+        working-directory: source/CXETCPP
+        run: >-
+          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target
+          exchange-bbo-reconstruction-tests exchange-feed-race-contract-tests
+          exchange-feed-race-semantics-tests exchange-feed-race-catalog-tests
+          exchange-feed-race-transport-tests exchange-feed-race-venue-tests
+          exchange-feed-race-report-tests
 
+  protocol-tests:
+    name: tests / protocol-contracts
+    needs: [snapshot, test-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 30
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Run standalone CLI, REST, and WebSocket contracts
+        working-directory: source/CXETCPP/tools/exchange_api_probe
+        run: >-
+          /usr/bin/ctest --test-dir build/standalone --output-on-failure
+          --no-tests=error --timeout 180
+          -R '^(exchange-probe-(cli|rest-contract|ws-contract)-tests)$'
+
+  safety-tests:
+    name: tests / redaction-and-codecs
+    needs: [snapshot, test-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 30
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Run redaction and gzip tests
+        working-directory: source/CXETCPP/tools/exchange_api_probe
+        run: >-
+          /usr/bin/ctest --test-dir build/standalone --output-on-failure
+          --no-tests=error --timeout 180
+          -R '^(exchange-probe-(redaction|gzip)-tests)$'
+
+  research-tests:
+    name: tests / comparison-and-research
+    needs: [snapshot, test-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 30
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Run offline comparison, research, and self-test routes
+        working-directory: source/CXETCPP/tools/exchange_api_probe
+        run: >-
+          /usr/bin/ctest --test-dir build/standalone --output-on-failure
+          --no-tests=error --timeout 180
+          -R '^(exchange-probe-(compare|research)-tests|binance-ws-race-self-test)$'
+
+  race-semantics-tests:
+    name: tests / race-contract-and-semantics
+    needs: [snapshot, test-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 45
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Run root-integrated contract and semantics tests
+        working-directory: source/CXETCPP
+        run: >-
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental
+          --output-on-failure --no-tests=error --timeout 180
+          -R '^exchange-feed-race-(contract|semantics)-tests$'
+
+  race-venue-tests:
+    name: tests / race-catalog-and-venues
+    needs: [snapshot, test-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 45
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Run root-integrated catalog and venue tests
+        working-directory: source/CXETCPP
+        run: >-
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental
+          --output-on-failure --no-tests=error --timeout 180
+          -R '^exchange-feed-race-(catalog|venue)-tests$'
+
+  race-transport-tests:
+    name: tests / race-transport
+    needs: [snapshot, test-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 45
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Run root-integrated transport test
+        working-directory: source/CXETCPP
+        run: >-
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental
+          --output-on-failure --no-tests=error --timeout 180
+          -R '^exchange-feed-race-transport-tests$'
+
+  race-report-tests:
+    name: tests / reports-and-reconstruction
+    needs: [snapshot, test-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 45
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Run reports and BBO reconstruction tests
+        working-directory: source/CXETCPP
+        run: >-
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental
+          --output-on-failure --no-tests=error --timeout 180
+          -R '^(exchange-feed-race-report-tests|exchange-bbo-reconstruction-tests)$'
+
+  web-build:
+    name: web-build
+    if: needs.snapshot.outputs.mode == 'own'
+    needs: [snapshot, prepare]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 20
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Install locked web dependencies
+        working-directory: source/CXETCPP/tools/exchange_api_probe/web
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Build web viewer
-        working-directory: web
+        working-directory: source/CXETCPP/tools/exchange_api_probe/web
         run: npm run build
 
-      - name: Test web viewer
-        working-directory: web
+  web-tests:
+    name: tests / web-viewer
+    if: needs.snapshot.outputs.mode == 'own'
+    needs: [snapshot, web-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 15
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    steps:
+      - name: Run web viewer tests
+        working-directory: source/CXETCPP/tools/exchange_api_probe/web
         run: npm test
 
-  private-root-integration:
-    name: private-root-integration
-    needs: resolve-family-revisions
+  sanitizer-address-undefined:
+    name: sanitizer / address-undefined
+    if: needs.snapshot.outputs.mode == 'own'
+    needs: [snapshot, prepare]
+    continue-on-error: true
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
-    timeout-minutes: 180
-
+    timeout-minutes: 240
+    defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
     steps:
-      - name: Checkout snapshotted private CXETCPP family
+      - name: Configure the real family ASan and UBSan route
+        working-directory: source/CXETCPP
+        run: /usr/bin/cmake --preset clang-ci-family-address-undefined-incremental -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+      - name: Build instrumented integration tests
+        working-directory: source/CXETCPP
+        run: >-
+          /usr/bin/cmake --build build/modes/clang-ci-family-address-undefined-incremental --parallel 4 --target
+          exchange-bbo-reconstruction-tests exchange-feed-race-contract-tests
+          exchange-feed-race-semantics-tests exchange-feed-race-catalog-tests
+          exchange-feed-race-transport-tests exchange-feed-race-venue-tests
+          exchange-feed-race-report-tests
+      - name: Run instrumented integration tests
+        working-directory: source/CXETCPP
+        run: >-
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-address-undefined-incremental
+          --output-on-failure --no-tests=error --timeout 180
+          -R '^(exchange-bbo-reconstruction-tests|exchange-feed-race-(contract|semantics|catalog|transport|venue|report)-tests)$'
+
+  publish-ready:
+    name: publish-ready
+    if: >-
+      always() && needs.snapshot.outputs.mode == 'own' &&
+      needs.production-build.result == 'success' && needs.root-integration-build.result == 'success'
+    needs: [snapshot, production-build, root-integration-build]
+    runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
+    timeout-minutes: 10
+    steps:
+      - &checkout_controller
+        name: Checkout family CI controller
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: be0hhh/CXETCPP
-          ref: ${{ needs.resolve-family-revisions.outputs.cxetcpp_sha }}
-          path: cxet-root
+          ref: main
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          submodules: true
+          path: controller
+          sparse-checkout: |
+            tools/Ci/FamilyCiController.py
+            tools/Ci/family_ci_graph.json
           persist-credentials: false
-
-      - name: Overlay the probe revision under test
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: ${{ github.repository }}
-          ref: ${{ github.sha }}
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: cxet-root/tools/exchange_api_probe
-          persist-credentials: false
-
-      - name: Verify checkout credentials were removed
-        run: |
-          for repository_path in \
-            "${GITHUB_WORKSPACE}/cxet-root" \
-            "${GITHUB_WORKSPACE}/cxet-root/tools/exchange_api_probe"; do
-            if git -C "${repository_path}" config --local --get-regexp \
-              '^(http\..*\.extraheader|core\.sshCommand)$' >/dev/null 2>&1; then
-              echo "::error::Checkout credentials remain configured in ${repository_path}."
-              exit 1
-            fi
-          done
-
-      - name: Record the integrated revisions
-        run: |
-          root_sha="$(git -C "${GITHUB_WORKSPACE}/cxet-root" rev-parse HEAD)"
-          probe_sha="$(git -C "${GITHUB_WORKSPACE}/cxet-root/tools/exchange_api_probe" rev-parse HEAD)"
-          {
-            echo "### Private CXETCPP integration input"
-            echo
-            echo "- CXETCPP root: \`${root_sha}\`"
-            echo "- Probe requested: \`${GITHUB_SHA}\`"
-            echo "- Probe overlaid: \`${probe_sha}\`"
-          } >> "${GITHUB_STEP_SUMMARY}"
-          if [[ "${probe_sha}" != "${GITHUB_SHA}" ]]; then
-            echo "::error::The overlaid probe SHA does not match github.sha."
-            exit 1
-          fi
-          {
-            echo '```text'
-            git -C "${GITHUB_WORKSPACE}/cxet-root" submodule status
-            echo '```'
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-
-      - name: Set up pinned LLVM
-        uses: ./cxet-root/.github/actions/setup-toolchain
-        with:
-          source-root: cxet-root
-          local-cache-root: /home/gha-runner/github-actions/cache/toolchains/wsl-ci-cxetcpp
-
-      - name: Report CMake and CTest binaries
-        run: |
-          /usr/bin/cmake --version
-          /usr/bin/ctest --version
-
-      - name: Configure the canonical root graph with probe integration
-        working-directory: cxet-root
+      - &publish
+        name: Publish successful gates
+        env:
+          GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
+          SNAPSHOT_ID: ${{ needs.snapshot.outputs.snapshot_id }}
+          CI_MODE: ${{ needs.snapshot.outputs.mode }}
         run: >-
-          /usr/bin/cmake
-          --preset clang-ci-family
-          -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+          python3 controller/tools/Ci/FamilyCiController.py publish
+          --repository "$GITHUB_REPOSITORY" --snapshot-json "$SNAPSHOT_JSON"
+          --snapshot-id "$SNAPSHOT_ID" --mode "$CI_MODE"
 
-      - name: Build the offline probe integration targets
-        working-directory: cxet-root
-        run: |
-          /usr/bin/cmake --build --preset clang-ci-family \
-            --parallel 4 \
-            --target \
-              exchange-bbo-reconstruction-tests \
-              exchange-feed-race-contract-tests \
-              exchange-feed-race-semantics-tests \
-              exchange-feed-race-catalog-tests \
-              exchange-feed-race-transport-tests \
-              exchange-feed-race-venue-tests \
-              exchange-feed-race-report-tests
-
-      - name: Run the offline probe integration tests
-        working-directory: cxet-root
-        run: >-
-          /usr/bin/ctest
-          --test-dir build/modes/clang-ci-family
-          --output-on-failure
-          --no-tests=error
-          --timeout 180
-          --parallel 4
-          --tests-regex
-          '^(exchange-bbo-reconstruction-tests|exchange-feed-race-(contract|semantics|catalog|transport|venue|report)-tests)$'
+  publish-ready-dependency:
+    name: publish-ready
+    if: >-
+      always() && needs.snapshot.outputs.mode == 'dependency' &&
+      needs.root-integration-build.result == 'success' &&
+      needs.protocol-tests.result == 'success' && needs.safety-tests.result == 'success' &&
+      needs.research-tests.result == 'success' && needs.race-semantics-tests.result == 'success' &&
+      needs.race-venue-tests.result == 'success' && needs.race-transport-tests.result == 'success' &&
+      needs.race-report-tests.result == 'success'
+    needs: [snapshot, root-integration-build, protocol-tests, safety-tests, research-tests, race-semantics-tests, race-venue-tests, race-transport-tests, race-report-tests]
+    runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
+    timeout-minutes: 10
+    steps:
+      - *checkout_controller
+      - *publish
