@@ -1,5 +1,7 @@
 name: local-ci
 
+run-name: local-ci ${{ github.event.client_payload.snapshot_id || github.run_id }}
+
 on:
   repository_dispatch:
     types: [family-build]
