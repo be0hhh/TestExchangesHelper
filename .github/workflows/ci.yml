@@ -17,12 +17,12 @@ jobs:
     timeout-minutes: 180
 
     steps:
-      - name: Require the canonical toolchain checkout key
+      - name: Require the canonical toolchain checkout token
         env:
-          CI_CXETCPP_SSH_KEY: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+          CI_FAMILY_READ_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
         run: |
-          if [ -z "$CI_CXETCPP_SSH_KEY" ]; then
-            echo "::error::CI_CXETCPP_SSH_KEY is required for the canonical compiler pin and bootstrap; fork PRs do not receive this secret."
+          if [ -z "$CI_FAMILY_READ_TOKEN" ]; then
+            echo "::error::CI_FAMILY_READ_TOKEN is required for the canonical compiler pin and bootstrap; fork PRs do not receive this secret."
             exit 1
           fi
 
@@ -32,7 +32,7 @@ jobs:
           repository: be0hhh/CXETCPP
           ref: main
           path: cxet-root
-          ssh-key: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           submodules: false
           sparse-checkout: |
             .github/actions/setup-toolchain
@@ -122,16 +122,16 @@ jobs:
     timeout-minutes: 180
 
     steps:
-      - name: Require the private CXETCPP checkout key
+      - name: Require the private CXETCPP checkout token
         env:
-          CI_CXETCPP_SSH_KEY: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+          CI_FAMILY_READ_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
         run: |
-          if [[ -z "${CI_CXETCPP_SSH_KEY}" ]]; then
-            echo "::error::CI_CXETCPP_SSH_KEY is required for private CXETCPP integration; fork PRs do not receive this secret."
+          if [[ -z "${CI_FAMILY_READ_TOKEN}" ]]; then
+            echo "::error::CI_FAMILY_READ_TOKEN is required for private CXETCPP integration; fork PRs do not receive this secret."
             {
               echo "### Private CXETCPP integration"
               echo
-              echo ":x: Missing repository secret \`CI_CXETCPP_SSH_KEY\`; the private root graph was not checked out or built."
+              echo ":x: Missing repository secret \`CI_FAMILY_READ_TOKEN\`; the private root graph was not checked out or built."
             } >> "${GITHUB_STEP_SUMMARY}"
             exit 1
           fi
@@ -142,7 +142,7 @@ jobs:
           repository: be0hhh/CXETCPP
           ref: main
           path: cxet-root
-          ssh-key: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           submodules: true
           persist-credentials: false
 

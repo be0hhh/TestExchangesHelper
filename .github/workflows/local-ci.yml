@@ -24,28 +24,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  standalone-cpp:
-    name: standalone-cpp
-    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
-    timeout-minutes: 180
-
+  resolve-family-revisions:
+    name: resolve-family-revisions
+    runs-on: [self-hosted, linux, x64, wsl, benchmark, hft-bench, test-exchanges-helper]
+    timeout-minutes: 10
+    outputs:
+      cxetcpp_sha: ${{ steps.snapshot.outputs.cxetcpp_sha }}
     steps:
-      - name: Require the canonical toolchain checkout key
-        env:
-          CI_CXETCPP_SSH_KEY: ${{ secrets.CI_CXETCPP_SSH_KEY }}
-        run: |
-          if [ -z "$CI_CXETCPP_SSH_KEY" ]; then
-            echo "::error::CI_CXETCPP_SSH_KEY is required for the canonical compiler pin and bootstrap; fork PRs do not receive this secret."
-            exit 1
-          fi
-
-      - name: Checkout canonical CXET toolchain owner
+      - name: Checkout revision resolver
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: be0hhh/CXETCPP
           ref: main
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          sparse-checkout: .github/actions/resolve-family-revisions
+          persist-credentials: false
+
+      - name: Snapshot family main revisions
+        id: snapshot
+        uses: ./.github/actions/resolve-family-revisions
+        with:
+          family-read-token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+
+  standalone-cpp:
+    name: standalone-cpp
+    needs: resolve-family-revisions
+    runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout canonical CXET toolchain owner
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/CXETCPP
+          ref: ${{ needs.resolve-family-revisions.outputs.cxetcpp_sha }}
           path: cxet-root
-          ssh-key: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           submodules: false
           sparse-checkout: |
             .github/actions/setup-toolchain
@@ -58,8 +72,17 @@ jobs:
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           path: cxet-root/tools/exchange_api_probe
           persist-credentials: false
+
+      - name: Record source revisions
+        run: |
+          {
+            echo '### Source revisions'
+            printf -- '- CXETCPP: `%s`\n' "$(git -C cxet-root rev-parse HEAD)"
+            printf -- '- TestExchangesHelper: `%s`\n' "$(git -C cxet-root/tools/exchange_api_probe rev-parse HEAD)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
 
       - name: Set up pinned LLVM
@@ -91,6 +114,7 @@ jobs:
 
   web:
     name: web-node-22
+    needs: resolve-family-revisions
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 15
 
@@ -98,6 +122,7 @@ jobs:
       - name: Checkout probe
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -119,31 +144,18 @@ jobs:
 
   private-root-integration:
     name: private-root-integration
+    needs: resolve-family-revisions
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 180
 
     steps:
-      - name: Require the private CXETCPP checkout key
-        env:
-          CI_CXETCPP_SSH_KEY: ${{ secrets.CI_CXETCPP_SSH_KEY }}
-        run: |
-          if [[ -z "${CI_CXETCPP_SSH_KEY}" ]]; then
-            echo "::error::CI_CXETCPP_SSH_KEY is required for private CXETCPP integration; fork PRs do not receive this secret."
-            {
-              echo "### Private CXETCPP integration"
-              echo
-              echo ":x: Missing repository secret \`CI_CXETCPP_SSH_KEY\`; the private root graph was not checked out or built."
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 1
-          fi
-
-      - name: Checkout private CXETCPP family
+      - name: Checkout snapshotted private CXETCPP family
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: be0hhh/CXETCPP
-          ref: main
+          ref: ${{ needs.resolve-family-revisions.outputs.cxetcpp_sha }}
           path: cxet-root
-          ssh-key: ${{ secrets.CI_CXETCPP_SSH_KEY }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           submodules: true
           persist-credentials: false
 
@@ -152,6 +164,7 @@ jobs:
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           path: cxet-root/tools/exchange_api_probe
           persist-credentials: false
 
