@@ -89,7 +89,7 @@ jobs:
         uses: ./cxet-root/.github/actions/setup-toolchain
         with:
           source-root: cxet-root
-          local-cache-root: /home/gha-runner/github-actions/cache/toolchains/${{ runner.name }}
+          local-cache-root: /home/gha-runner/github-actions/cache/toolchains/wsl-ci-cxetcpp
 
       - name: Report CMake and CTest binaries
         run: |
@@ -207,7 +207,7 @@ jobs:
         uses: ./cxet-root/.github/actions/setup-toolchain
         with:
           source-root: cxet-root
-          local-cache-root: /home/gha-runner/github-actions/cache/toolchains/${{ runner.name }}
+          local-cache-root: /home/gha-runner/github-actions/cache/toolchains/wsl-ci-cxetcpp
 
       - name: Report CMake and CTest binaries
         run: |
