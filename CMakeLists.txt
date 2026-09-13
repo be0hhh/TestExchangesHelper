@@ -81,6 +81,18 @@ if(CXET_EXCHANGE_FEED_RACE_BUILD)
         message(FATAL_ERROR
             "exchange-feed-race requires the CXET root source graph")
     endif()
+    add_executable(binance-feed-cadence
+        src/CadenceMain.cpp src/CadenceCommon.cpp src/CadenceDirect.cpp
+        src/CadenceCxet.cpp src/NetCommon.cpp)
+    target_compile_features(binance-feed-cadence PRIVATE cxx_std_23)
+    target_include_directories(binance-feed-cadence PRIVATE include)
+    target_link_libraries(binance-feed-cadence PRIVATE
+        cxet::cxet_lib cxet::read_only_contracts
+        OpenSSL::Crypto OpenSSL::SSL Boost::json Threads::Threads)
+    add_executable(binance-cadence-tests tests/CadenceTests.cpp src/CadenceCommon.cpp)
+    target_include_directories(binance-cadence-tests PRIVATE src)
+    target_link_libraries(binance-cadence-tests PRIVATE Boost::json)
+    add_test(NAME binance-cadence-tests COMMAND binance-cadence-tests)
     add_library(exchange_feed_race_lib
         src/RaceAnalysis.cpp
         src/RaceBook.cpp

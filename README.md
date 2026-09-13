@@ -201,6 +201,55 @@ An observed primary/complement candidate is emitted only after three clean
 sessions with at least 1,000 strict events per session and the same unique
 leader in every session. It is evidence, not an automatic production choice.
 
+## Binance feed cadence comparison
+
+`binance-feed-cadence` is an opt-in diagnostic target in the same root graph.
+It samples `trade`, `aggTrade`, `bookTicker`, diff depth and partial depth
+5/10/20 at 0/100/250/500ms using independent direct WebSockets, alongside
+the exact available CXET public RuntimeV1 routes. Unsupported CXET variants
+remain explicit; nominal depth parameters cannot substitute for the actual
+subscription payload. No production APIs or routes are changed.
+
+```bash
+cmake -S . -B build -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+cmake --build build --target binance-feed-cadence binance-cadence-tests -j 4
+ctest --test-dir build -R '^binance-cadence-tests$' --output-on-failure
+python3 tools/exchange_api_probe/tests/CadenceAnalysisTests.py
+# Public network capture; use a new output directory:
+build/tools/exchange_api_probe/binance-feed-cadence ETHUSDT results/eth-cadence
+python3 tools/exchange_api_probe/scripts/AnalyzeCadence.py results/eth-cadence
+```
+
+The shared window is 30 seconds of warmup followed by 180 measured seconds,
+after at most 30 seconds waiting for connection preparation. Native CXET
+connector/REST cleanup can outlast that deadline because the existing API
+does not expose cancellation. No disconnected lane is automatically replaced.
+The depth route may obtain its normal public REST snapshot; snapshot
+publications do not enter depth cadence statistics.
+
+Both receive clocks use `CLOCK_MONOTONIC_RAW`. Direct receipt is measured at
+completion of a WebSocket message; CXET uses its native local receive marker,
+with a separate diagnostic observation timestamp. Cross-path differences
+include independent connections, scheduling, and different capture boundaries;
+they are not isolated parser benchmarks. Missing exchange timestamps remain
+missing. The CXET public API does not expose physical frame counts or Binance
+transaction field `T` on these normalized events.
+
+Capture uses bounded per-lane storage apportioned from 512 MiB per path,
+reserves before receiving, writes CSV after capture, and marks overflow
+incomplete. The manifest records endpoints, subscriptions, parser provenance,
+errors and unsupported/empty lanes. Reports retain those states and separate
+message activity, update intervals, observation delays and matching coverage.
+A short current sample cannot establish an improvement over yesterday without
+a comparable historical capture.
+
+The matrix explicitly attempts the `@250ms` spelling. An empty result for that
+spelling does not rule out Binance's unsuffixed default depth stream; it is
+not automatically retried under another name. Native Binance trade parsing
+also skips zero-price/zero-quantity markers while the direct counter counts
+their IDs. The compact capture omits `p/q`, so missing matched IDs alone cannot
+establish whether genuine trades were lost.
+
 ## BBO reconstruction diagnostic
 
 The same opt-in root build also adds `exchange-bbo-reconstruction-probe`.
