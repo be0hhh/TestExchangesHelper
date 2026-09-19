@@ -70,8 +70,8 @@ jobs:
           repositories = {"CXETCPP", "TestExchangesHelper", "hft-compressor", "hft-recorder", "hft-parser", "trading-core", "hft-trader", "hft-backtest", "trader", "vetron"}
           if os.environ["GITHUB_EVENT_NAME"] == "repository_dispatch":
               payload = json.loads(os.environ["CLIENT_PAYLOAD"])
-              if payload.get("schema_version") != 1:
-                  raise SystemExit("family-build requires schema_version=1")
+              if payload.get("schema_version") != 2:
+                  raise SystemExit("family-build requires schema_version=2")
               mode, snapshot, snapshot_id = payload.get("mode"), payload.get("snapshot"), payload.get("snapshot_id")
               if payload.get("trigger_repo") not in repositories or not re.fullmatch(r"[0-9a-f]{40}", str(payload.get("trigger_sha", ""))):
                   raise SystemExit("family-build contains an invalid trigger")
@@ -93,13 +93,14 @@ jobs:
       - name: Claim current dispatched snapshot
         if: github.event_name == 'repository_dispatch'
         env:
+          DISPATCH_ID: ${{ github.event.client_payload.dispatch_id }}
           GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           SNAPSHOT_JSON: ${{ steps.snapshot.outputs.snapshot_json }}
           SNAPSHOT_ID: ${{ steps.snapshot.outputs.snapshot_id }}
         run: >-
           python3 controller/tools/Ci/FamilyCiController.py claim
           --repository "$GITHUB_REPOSITORY" --snapshot-json "$SNAPSHOT_JSON"
-          --snapshot-id "$SNAPSHOT_ID"
+          --snapshot-id "$SNAPSHOT_ID" --dispatch-id "$DISPATCH_ID"
 
   prepare:
     name: prepare-incremental-trees
@@ -109,6 +110,8 @@ jobs:
     defaults:
       run:
         shell: /home/gha-runner/github-actions/bin/gha-heavy-shell {0}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Checkout exact family root without cleaning build outputs
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -117,77 +120,25 @@ jobs:
           ref: ${{ needs.snapshot.outputs.cxetcpp_sha }}
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           path: source/CXETCPP
-          submodules: true
+          submodules: false
           clean: false
           persist-credentials: false
-      - name: Overlay exact HFT Parser snapshot
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: be0hhh/hft-parser
-          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).hft_parser }}
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/CXETCPP/apps/hft-parser
-          clean: false
-          persist-credentials: false
-      - name: Overlay exact Trading Core snapshot
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: be0hhh/trading-core
-          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).trading_core }}
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/CXETCPP/apps/trading-core
-          clean: false
-          persist-credentials: false
-      - name: Overlay exact Recorder snapshot
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: be0hhh/hft-recorder
-          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).hft_recorder }}
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/CXETCPP/apps/hft-recorder
-          clean: false
-          persist-credentials: false
-      - name: Overlay exact HFT Trader snapshot
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: be0hhh/hft-trader
-          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).hft_trader }}
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/CXETCPP/apps/hft-trader
-          clean: false
-          persist-credentials: false
-      - name: Overlay exact HFT Backtest snapshot
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: be0hhh/hft-backtest
-          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).hft_backtest }}
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/CXETCPP/apps/hft-backtest
-          clean: false
-          persist-credentials: false
-      - name: Overlay exact Trader snapshot
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: be0hhh/trader
-          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).trader }}
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/CXETCPP/apps/trader
-          clean: false
-          persist-credentials: false
-      - name: Overlay exact Vetron snapshot
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: be0hhh/vetron
-          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).vetron }}
-          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/CXETCPP/apps/vetron
-          clean: false
-          persist-credentials: false
+      - name: Restore pinned source graph without shallow history
+        working-directory: source/CXETCPP
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: 'url.https://x-access-token:${{ secrets.CI_FAMILY_READ_TOKEN }}@github.com/.insteadOf'
+          GIT_CONFIG_VALUE_0: 'git@github.com:'
+        run: |
+          git submodule update --init -- tools/exchange_api_probe apps/hft-compressor apps/hft-recorder apps/hft-parser apps/trading-core apps/hft-trader apps/hft-backtest apps/trader apps/vetron extra/abseil-cpp extra/liburing extra/secp256k1 extra/wolfssl || {
+            echo "::error::Pinned source revision is unavailable or checkout is incompatible; inspect the submodule error. No automatic cleanup or revision fallback is permitted."
+            exit 1
+          }
       - name: Overlay exact TestExchangesHelper snapshot
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          repository: ${{ github.repository }}
-          ref: ${{ needs.snapshot.outputs.source_sha }}
+          repository: be0hhh/TestExchangesHelper
+          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).test_exchanges_helper }}
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           path: source/CXETCPP/tools/exchange_api_probe
           clean: false
@@ -197,12 +148,12 @@ jobs:
         with:
           source-root: source/CXETCPP
           local-cache-root: /home/gha-runner/github-actions/cache/toolchains/wsl-ci-cxetcpp
-      - name: Configure persistent standalone tree
-        working-directory: source/CXETCPP/tools/exchange_api_probe
-        run: /usr/bin/cmake -S . -B build/standalone -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: Configure persistent root-integration tree
         working-directory: source/CXETCPP
-        run: /usr/bin/cmake --preset clang-ci-family-incremental -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          /usr/bin/cmake --preset clang-ci-family-incremental -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" record --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
 
   production-build:
     name: production-build / standalone
@@ -211,10 +162,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 120
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Build standalone production tools
-        working-directory: source/CXETCPP/tools/exchange_api_probe
-        run: /usr/bin/cmake --build build/standalone --target exchange-api-probe binance-ws-race --parallel 4
+        working-directory: source/CXETCPP
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --target exchange-api-probe binance-ws-race --parallel 4
 
   root-integration-build:
     name: root-integration-build / exchange-feed-race
@@ -225,12 +180,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 180
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Build root-integrated probe products
         working-directory: source/CXETCPP
-        run: >-
-          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4
-          --target exchange-feed-race exchange-bbo-reconstruction-probe
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target exchange-feed-race exchange-bbo-reconstruction-probe
 
   test-build:
     name: test-build
@@ -238,23 +195,19 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 180
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Build standalone offline tests
-        working-directory: source/CXETCPP/tools/exchange_api_probe
-        run: >-
-          /usr/bin/cmake --build build/standalone --parallel 4 --target
-          exchange-probe-cli-tests exchange-probe-rest-contract-tests
-          exchange-probe-ws-contract-tests exchange-probe-redaction-tests
-          exchange-probe-gzip-tests exchange-probe-compare-tests
-          exchange-probe-research-tests binance-ws-race
+        working-directory: source/CXETCPP
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target exchange-probe-cli-tests exchange-probe-rest-contract-tests exchange-probe-ws-contract-tests exchange-probe-redaction-tests exchange-probe-gzip-tests exchange-probe-compare-tests exchange-probe-research-tests binance-ws-race
       - name: Build root integration tests
         working-directory: source/CXETCPP
-        run: >-
-          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target
-          exchange-bbo-reconstruction-tests exchange-feed-race-contract-tests
-          exchange-feed-race-semantics-tests exchange-feed-race-catalog-tests
-          exchange-feed-race-transport-tests exchange-feed-race-venue-tests
-          exchange-feed-race-report-tests
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target exchange-bbo-reconstruction-tests exchange-feed-race-contract-tests exchange-feed-race-semantics-tests exchange-feed-race-catalog-tests exchange-feed-race-transport-tests exchange-feed-race-venue-tests exchange-feed-race-report-tests
 
   protocol-tests:
     name: tests / protocol-contracts
@@ -262,13 +215,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 30
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run standalone CLI, REST, and WebSocket contracts
-        working-directory: source/CXETCPP/tools/exchange_api_probe
-        run: >-
-          /usr/bin/ctest --test-dir build/standalone --output-on-failure
-          --no-tests=error --timeout 180
-          -R '^(exchange-probe-(cli|rest-contract|ws-contract)-tests)$'
+        working-directory: source/CXETCPP
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-probe-(cli|rest-contract|ws-contract)-tests)$'
 
   safety-tests:
     name: tests / redaction-and-codecs
@@ -276,13 +230,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 30
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run redaction and gzip tests
-        working-directory: source/CXETCPP/tools/exchange_api_probe
-        run: >-
-          /usr/bin/ctest --test-dir build/standalone --output-on-failure
-          --no-tests=error --timeout 180
-          -R '^(exchange-probe-(redaction|gzip)-tests)$'
+        working-directory: source/CXETCPP
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-probe-(redaction|gzip)-tests)$'
 
   research-tests:
     name: tests / comparison-and-research
@@ -290,13 +245,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 30
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run offline comparison, research, and self-test routes
-        working-directory: source/CXETCPP/tools/exchange_api_probe
-        run: >-
-          /usr/bin/ctest --test-dir build/standalone --output-on-failure
-          --no-tests=error --timeout 180
-          -R '^(exchange-probe-(compare|research)-tests|binance-ws-race-self-test)$'
+        working-directory: source/CXETCPP
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-probe-(compare|research)-tests|binance-ws-race-self-test)$'
 
   race-semantics-tests:
     name: tests / race-contract-and-semantics
@@ -304,13 +260,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 45
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run root-integrated contract and semantics tests
         working-directory: source/CXETCPP
-        run: >-
-          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental
-          --output-on-failure --no-tests=error --timeout 180
-          -R '^exchange-feed-race-(contract|semantics)-tests$'
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^exchange-feed-race-(contract|semantics)-tests$'
 
   race-venue-tests:
     name: tests / race-catalog-and-venues
@@ -318,13 +275,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 45
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run root-integrated catalog and venue tests
         working-directory: source/CXETCPP
-        run: >-
-          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental
-          --output-on-failure --no-tests=error --timeout 180
-          -R '^exchange-feed-race-(catalog|venue)-tests$'
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^exchange-feed-race-(catalog|venue)-tests$'
 
   race-transport-tests:
     name: tests / race-transport
@@ -332,13 +290,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 45
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run root-integrated transport test
         working-directory: source/CXETCPP
-        run: >-
-          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental
-          --output-on-failure --no-tests=error --timeout 180
-          -R '^exchange-feed-race-transport-tests$'
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^exchange-feed-race-transport-tests$'
 
   race-report-tests:
     name: tests / reports-and-reconstruction
@@ -346,13 +305,14 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 45
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run reports and BBO reconstruction tests
         working-directory: source/CXETCPP
-        run: >-
-          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental
-          --output-on-failure --no-tests=error --timeout 180
-          -R '^(exchange-feed-race-report-tests|exchange-bbo-reconstruction-tests)$'
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-feed-race-report-tests|exchange-bbo-reconstruction-tests)$'
 
   web-build:
     name: web-build
@@ -361,13 +321,21 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 20
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Install locked web dependencies
         working-directory: source/CXETCPP/tools/exchange_api_probe/web
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          npm ci --ignore-scripts --no-audit --no-fund
       - name: Build web viewer
         working-directory: source/CXETCPP/tools/exchange_api_probe/web
-        run: npm run build
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          npm run build
 
   web-tests:
     name: tests / web-viewer
@@ -376,59 +344,142 @@ jobs:
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 15
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run web viewer tests
         working-directory: source/CXETCPP/tools/exchange_api_probe/web
-        run: npm test
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-incremental"
+          npm test
 
   sanitizer-address-undefined:
+    continue-on-error: true
     name: sanitizer / address-undefined
     if: needs.snapshot.outputs.mode == 'own'
     needs: [snapshot, prepare]
-    continue-on-error: true
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 240
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
+    env:
+      FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Configure the real family ASan and UBSan route
         working-directory: source/CXETCPP
-        run: /usr/bin/cmake --preset clang-ci-family-address-undefined-incremental -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          /usr/bin/cmake --preset clang-ci-family-address-undefined-incremental -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" record --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
       - name: Build instrumented integration tests
         working-directory: source/CXETCPP
-        run: >-
-          /usr/bin/cmake --build build/modes/clang-ci-family-address-undefined-incremental --parallel 4 --target
-          exchange-bbo-reconstruction-tests exchange-feed-race-contract-tests
-          exchange-feed-race-semantics-tests exchange-feed-race-catalog-tests
-          exchange-feed-race-transport-tests exchange-feed-race-venue-tests
-          exchange-feed-race-report-tests
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
+          /usr/bin/cmake --build build/modes/clang-ci-family-address-undefined-incremental --parallel 4 --target exchange-bbo-reconstruction-tests exchange-feed-race-contract-tests exchange-feed-race-semantics-tests exchange-feed-race-catalog-tests exchange-feed-race-transport-tests exchange-feed-race-venue-tests exchange-feed-race-report-tests
       - name: Run instrumented integration tests
         working-directory: source/CXETCPP
-        run: >-
-          /usr/bin/ctest --test-dir build/modes/clang-ci-family-address-undefined-incremental
-          --output-on-failure --no-tests=error --timeout 180
-          -R '^(exchange-bbo-reconstruction-tests|exchange-feed-race-(contract|semantics|catalog|transport|venue|report)-tests)$'
+        run: |
+          python3 "$GITHUB_WORKSPACE/source/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
+          /usr/bin/ctest --test-dir build/modes/clang-ci-family-address-undefined-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-bbo-reconstruction-tests|exchange-feed-race-(contract|semantics|catalog|transport|venue|report)-tests)$'
 
-  publish-ready:
-    name: publish-ready
+  publish-buildable-own:
+    name: publish-buildable-own
+    needs: [snapshot, production-build, web-build]
     if: >-
-      always() && needs.snapshot.outputs.mode == 'own' &&
-      needs.production-build.result == 'success' && needs.root-integration-build.result == 'success'
-    needs: [snapshot, production-build, root-integration-build]
+      always() && github.event_name == 'repository_dispatch' && needs.snapshot.result == 'success' &&
+      needs.snapshot.outputs.mode == 'own' && needs.production-build.result == 'success' && needs.web-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
+    defaults:
+      run: {shell: bash}
     timeout-minutes: 10
     steps:
-      - &checkout_controller
-        name: Checkout family CI controller
+      - name: Checkout family controller
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: be0hhh/CXETCPP
           ref: main
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: controller
           sparse-checkout: tools/Ci
+          path: controller
+          clean: false
           persist-credentials: false
-      - &publish
-        name: Publish successful gates
+      - name: Publish buildable-own
+        env:
+          GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
+          SNAPSHOT_ID: ${{ needs.snapshot.outputs.snapshot_id }}
+          CI_MODE: ${{ needs.snapshot.outputs.mode }}
+        run: >-
+          python3 controller/tools/Ci/FamilyCiController.py publish-buildable
+          --repository "$GITHUB_REPOSITORY" --snapshot-json "$SNAPSHOT_JSON"
+          --snapshot-id "$SNAPSHOT_ID" --mode "$CI_MODE"
+
+  publish-buildable-dependency:
+    name: publish-buildable-dependency
+    needs: [snapshot, root-integration-build]
+    if: >-
+      always() && github.event_name == 'repository_dispatch' && needs.snapshot.result == 'success' &&
+      needs.snapshot.outputs.mode == 'dependency' && needs.root-integration-build.result == 'success'
+    runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
+    defaults:
+      run: {shell: bash}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout family controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/CXETCPP
+          ref: main
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          sparse-checkout: tools/Ci
+          path: controller
+          clean: false
+          persist-credentials: false
+      - name: Publish buildable-dependency
+        env:
+          GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
+          SNAPSHOT_ID: ${{ needs.snapshot.outputs.snapshot_id }}
+          CI_MODE: ${{ needs.snapshot.outputs.mode }}
+        run: >-
+          python3 controller/tools/Ci/FamilyCiController.py publish-buildable
+          --repository "$GITHUB_REPOSITORY" --snapshot-json "$SNAPSHOT_JSON"
+          --snapshot-id "$SNAPSHOT_ID" --mode "$CI_MODE"
+
+  publish-ready:
+    name: publish-ready
+    needs: [snapshot, prepare, production-build, root-integration-build, web-build, test-build, protocol-tests, safety-tests, research-tests, race-semantics-tests, race-venue-tests, race-transport-tests, race-report-tests, web-tests]
+    if: >-
+      always() && github.event_name == 'repository_dispatch' && needs.snapshot.result == 'success' &&
+      needs.prepare.result == 'success' &&
+      (needs.production-build.result == 'success' || (needs.snapshot.outputs.mode == 'dependency' && needs.production-build.result == 'skipped')) &&
+      needs.root-integration-build.result == 'success' &&
+      (needs.web-build.result == 'success' || (needs.snapshot.outputs.mode == 'dependency' && needs.web-build.result == 'skipped')) &&
+      needs.test-build.result == 'success' &&
+      needs.protocol-tests.result == 'success' &&
+      needs.safety-tests.result == 'success' &&
+      needs.research-tests.result == 'success' &&
+      needs.race-semantics-tests.result == 'success' &&
+      needs.race-venue-tests.result == 'success' &&
+      needs.race-transport-tests.result == 'success' &&
+      needs.race-report-tests.result == 'success' &&
+      (needs.web-tests.result == 'success' || (needs.snapshot.outputs.mode == 'dependency' && needs.web-tests.result == 'skipped'))
+    runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
+    defaults:
+      run: {shell: bash}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout family controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/CXETCPP
+          ref: main
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          sparse-checkout: tools/Ci
+          path: controller
+          clean: false
+          persist-credentials: false
+      - name: Publish ready
         env:
           GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
           SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
@@ -439,18 +490,67 @@ jobs:
           --repository "$GITHUB_REPOSITORY" --snapshot-json "$SNAPSHOT_JSON"
           --snapshot-id "$SNAPSHOT_ID" --mode "$CI_MODE"
 
-  publish-ready-dependency:
-    name: publish-ready
+  publish-build-failed:
+    name: publish-build-failed
+    needs: [snapshot, prepare, production-build, root-integration-build, web-build]
     if: >-
-      always() && needs.snapshot.outputs.mode == 'dependency' &&
-      needs.root-integration-build.result == 'success' &&
-      needs.protocol-tests.result == 'success' && needs.safety-tests.result == 'success' &&
-      needs.research-tests.result == 'success' && needs.race-semantics-tests.result == 'success' &&
-      needs.race-venue-tests.result == 'success' && needs.race-transport-tests.result == 'success' &&
-      needs.race-report-tests.result == 'success'
-    needs: [snapshot, root-integration-build, protocol-tests, safety-tests, research-tests, race-semantics-tests, race-venue-tests, race-transport-tests, race-report-tests]
+      always() && github.event_name == 'repository_dispatch' && needs.snapshot.result == 'success' &&
+      (needs.prepare.result == 'failure' || needs.prepare.result == 'cancelled' || needs.production-build.result == 'failure' || needs.production-build.result == 'cancelled' || needs.root-integration-build.result == 'failure' || needs.root-integration-build.result == 'cancelled' || needs.web-build.result == 'failure' || needs.web-build.result == 'cancelled')
     runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
+    defaults:
+      run: {shell: bash}
     timeout-minutes: 10
     steps:
-      - *checkout_controller
-      - *publish
+      - name: Checkout family controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/CXETCPP
+          ref: main
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          sparse-checkout: tools/Ci
+          path: controller
+          clean: false
+          persist-credentials: false
+      - name: Publish build-failed
+        env:
+          GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
+          SNAPSHOT_ID: ${{ needs.snapshot.outputs.snapshot_id }}
+          CI_MODE: ${{ needs.snapshot.outputs.mode }}
+        run: >-
+          python3 controller/tools/Ci/FamilyCiController.py publish-failed
+          --repository "$GITHUB_REPOSITORY" --snapshot-json "$SNAPSHOT_JSON"
+          --snapshot-id "$SNAPSHOT_ID" --mode "$CI_MODE" --failure-kind build
+
+  publish-checks-failed:
+    name: publish-checks-failed
+    needs: [snapshot, prepare, production-build, root-integration-build, web-build, test-build, protocol-tests, safety-tests, research-tests, race-semantics-tests, race-venue-tests, race-transport-tests, race-report-tests, web-tests]
+    if: >-
+      always() && github.event_name == 'repository_dispatch' && needs.snapshot.result == 'success' &&
+      !(needs.prepare.result == 'failure' || needs.prepare.result == 'cancelled' || needs.production-build.result == 'failure' || needs.production-build.result == 'cancelled' || needs.root-integration-build.result == 'failure' || needs.root-integration-build.result == 'cancelled' || needs.web-build.result == 'failure' || needs.web-build.result == 'cancelled') &&
+      (needs.test-build.result == 'failure' || needs.test-build.result == 'cancelled' || needs.protocol-tests.result == 'failure' || needs.protocol-tests.result == 'cancelled' || needs.safety-tests.result == 'failure' || needs.safety-tests.result == 'cancelled' || needs.research-tests.result == 'failure' || needs.research-tests.result == 'cancelled' || needs.race-semantics-tests.result == 'failure' || needs.race-semantics-tests.result == 'cancelled' || needs.race-venue-tests.result == 'failure' || needs.race-venue-tests.result == 'cancelled' || needs.race-transport-tests.result == 'failure' || needs.race-transport-tests.result == 'cancelled' || needs.race-report-tests.result == 'failure' || needs.race-report-tests.result == 'cancelled' || needs.web-tests.result == 'failure' || needs.web-tests.result == 'cancelled')
+    runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
+    defaults:
+      run: {shell: bash}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout family controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: be0hhh/CXETCPP
+          ref: main
+          token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          sparse-checkout: tools/Ci
+          path: controller
+          clean: false
+          persist-credentials: false
+      - name: Publish checks-failed
+        env:
+          GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
+          SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
+          SNAPSHOT_ID: ${{ needs.snapshot.outputs.snapshot_id }}
+          CI_MODE: ${{ needs.snapshot.outputs.mode }}
+        run: >-
+          python3 controller/tools/Ci/FamilyCiController.py publish-failed
+          --repository "$GITHUB_REPOSITORY" --snapshot-json "$SNAPSHOT_JSON"
+          --snapshot-id "$SNAPSHOT_ID" --mode "$CI_MODE" --failure-kind checks

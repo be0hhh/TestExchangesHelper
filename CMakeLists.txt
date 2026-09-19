@@ -206,7 +206,7 @@ if(CXET_EXCHANGE_FEED_RACE_BUILD)
 endif()
 
 include(CTest)
-if(BUILD_TESTING)
+if(BUILD_TESTING OR CXET_FAMILY_VERIFICATION)
     add_executable(exchange-probe-cli-tests tests/CliTests.cpp)
     target_link_libraries(exchange-probe-cli-tests PRIVATE exchange_probe_lib)
     add_test(NAME exchange-probe-cli-tests COMMAND exchange-probe-cli-tests)
