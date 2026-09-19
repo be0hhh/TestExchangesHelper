@@ -359,8 +359,10 @@ jobs:
   sanitizer-address-undefined:
     continue-on-error: true
     name: sanitizer / address-undefined
-    if: needs.snapshot.outputs.mode == 'own'
-    needs: [snapshot, prepare]
+    if: >-
+      needs.snapshot.outputs.mode == 'own' &&
+      needs.production-build.result == 'success' && needs.web-build.result == 'success'
+    needs: [snapshot, production-build, web-build]
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 240
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
