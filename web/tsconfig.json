@@ -5,7 +5,7 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "noEmit": true,
-    "lib": ["ES2022", "DOM"]
+    "lib": ["ES2022", "DOM", "ESNext.Disposable"]
   },
   "include": ["src/**/*.ts"]
 }
