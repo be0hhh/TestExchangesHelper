@@ -119,12 +119,12 @@ jobs:
           repository: be0hhh/CXETCPP
           ref: ${{ needs.snapshot.outputs.cxetcpp_sha }}
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/family-ci/CXETCPP
+          path: source/family-ci-v3/CXETCPP
           submodules: false
           clean: false
           persist-credentials: false
       - name: Restore pinned source graph without shallow history
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         env:
           GIT_CONFIG_COUNT: 2
           GIT_CONFIG_KEY_0: 'url.https://x-access-token:${{ secrets.CI_FAMILY_READ_TOKEN }}@github.com/.insteadOf'
@@ -137,25 +137,24 @@ jobs:
             exit 1
           }
       - name: Overlay exact TestExchangesHelper snapshot
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: ./source/family-ci-v3/CXETCPP/.github/actions/overlay-family-revision
         with:
+          source-root: source/family-ci-v3/CXETCPP
+          repository-path: tools/exchange_api_probe
           repository: be0hhh/TestExchangesHelper
-          ref: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).test_exchanges_helper }}
+          revision: ${{ fromJSON(needs.snapshot.outputs.snapshot_json).test_exchanges_helper }}
           token: ${{ secrets.CI_FAMILY_READ_TOKEN }}
-          path: source/family-ci/CXETCPP/tools/exchange_api_probe
-          clean: false
-          persist-credentials: false
       - name: Set up pinned LLVM
-        uses: ./source/family-ci/CXETCPP/.github/actions/setup-toolchain
+        uses: ./source/family-ci-v3/CXETCPP/.github/actions/setup-toolchain
         with:
-          source-root: source/family-ci/CXETCPP
+          source-root: source/family-ci-v3/CXETCPP
           local-cache-root: /home/gha-runner/github-actions/cache/toolchains/wsl-ci-cxetcpp
       - name: Configure persistent root-integration tree
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
           /usr/bin/cmake --preset clang-ci-family-incremental -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" record --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" record --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
 
   production-build:
     name: production-build / standalone
@@ -168,9 +167,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Build standalone production tools
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/cmake --build build/modes/clang-ci-family-incremental --target exchange-api-probe binance-ws-race --parallel 4
 
   root-integration-build:
@@ -186,9 +185,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Build root-integrated probe products
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target exchange-feed-race exchange-bbo-reconstruction-probe
 
   test-build:
@@ -201,14 +200,14 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Build standalone offline tests
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target exchange-probe-cli-tests exchange-probe-rest-contract-tests exchange-probe-ws-contract-tests exchange-probe-redaction-tests exchange-probe-gzip-tests exchange-probe-compare-tests exchange-probe-research-tests binance-ws-race
       - name: Build root integration tests
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target exchange-bbo-reconstruction-tests exchange-feed-race-contract-tests exchange-feed-race-semantics-tests exchange-feed-race-catalog-tests exchange-feed-race-transport-tests exchange-feed-race-venue-tests exchange-feed-race-report-tests
 
   protocol-tests:
@@ -221,9 +220,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run standalone CLI, REST, and WebSocket contracts
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-probe-(cli|rest-contract|ws-contract)-tests)$'
 
   safety-tests:
@@ -236,9 +235,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run redaction and gzip tests
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-probe-(redaction|gzip)-tests)$'
 
   research-tests:
@@ -251,9 +250,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run offline comparison, research, and self-test routes
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-probe-(compare|research)-tests|binance-ws-race-self-test)$'
 
   race-semantics-tests:
@@ -266,9 +265,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run root-integrated contract and semantics tests
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^exchange-feed-race-(contract|semantics)-tests$'
 
   race-venue-tests:
@@ -281,9 +280,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run root-integrated catalog and venue tests
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^exchange-feed-race-(catalog|venue)-tests$'
 
   race-transport-tests:
@@ -296,9 +295,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run root-integrated transport test
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^exchange-feed-race-transport-tests$'
 
   race-report-tests:
@@ -311,9 +310,9 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run reports and BBO reconstruction tests
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           /usr/bin/ctest --test-dir build/modes/clang-ci-family-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-feed-race-report-tests|exchange-bbo-reconstruction-tests)$'
 
   web-build:
@@ -327,16 +326,16 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Install locked web dependencies
-        working-directory: source/family-ci/CXETCPP/tools/exchange_api_probe/web
+        working-directory: source/family-ci-v3/CXETCPP/tools/exchange_api_probe/web
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           npm ci --ignore-scripts --no-audit --no-fund
       - name: Build web viewer
-        working-directory: source/family-ci/CXETCPP/tools/exchange_api_probe/web
+        working-directory: source/family-ci-v3/CXETCPP/tools/exchange_api_probe/web
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           npm run build
 
   web-tests:
@@ -350,10 +349,10 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Run web viewer tests
-        working-directory: source/family-ci/CXETCPP/tools/exchange_api_probe/web
+        working-directory: source/family-ci-v3/CXETCPP/tools/exchange_api_probe/web
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
           npm test
 
   sanitizer-address-undefined:
@@ -370,20 +369,20 @@ jobs:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
     steps:
       - name: Configure the real family ASan and UBSan route
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" source --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON"
           /usr/bin/cmake --preset clang-ci-family-address-undefined-incremental -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" record --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" record --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
       - name: Build instrumented integration tests
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
           /usr/bin/cmake --build build/modes/clang-ci-family-address-undefined-incremental --parallel 4 --target exchange-bbo-reconstruction-tests exchange-feed-race-contract-tests exchange-feed-race-semantics-tests exchange-feed-race-catalog-tests exchange-feed-race-transport-tests exchange-feed-race-venue-tests exchange-feed-race-report-tests
       - name: Run instrumented integration tests
-        working-directory: source/family-ci/CXETCPP
+        working-directory: source/family-ci-v3/CXETCPP
         run: |
-          python3 "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
+          python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-address-undefined-incremental"
           /usr/bin/ctest --test-dir build/modes/clang-ci-family-address-undefined-incremental --output-on-failure --no-tests=error --timeout 180 -R '^(exchange-bbo-reconstruction-tests|exchange-feed-race-(contract|semantics|catalog|transport|venue|report)-tests)$'
 
   publish-buildable-own:
