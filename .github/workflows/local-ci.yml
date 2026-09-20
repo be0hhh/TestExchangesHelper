@@ -1,6 +1,6 @@
 name: local-ci
 
-run-name: local-ci ${{ github.event.client_payload.snapshot_id || github.run_id }}
+run-name: local-ci ${{ github.event.client_payload.snapshot_id || github.run_id }} ${{ github.event.client_payload.dispatch_id || 'manual' }}
 
 on:
   repository_dispatch:
@@ -180,12 +180,15 @@ jobs:
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
     env:
       FAMILY_SNAPSHOT_JSON: ${{ needs.snapshot.outputs.snapshot_json }}
+      FAMILY_REPOSITORY_SNAPSHOT_ID: ${{ needs.snapshot.outputs.snapshot_id }}
+      GH_TOKEN: ${{ secrets.CI_FAMILY_READ_TOKEN }}
     steps:
       - name: Build root-integrated probe products
         working-directory: source/family-ci-v3/CXETCPP
         run: |
           python3 "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/tools/Ci/FamilyCiWorkspace.py" verify --root "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP" --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --build-dir "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
-          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target exchange-feed-race exchange-bbo-reconstruction-probe
+          /usr/bin/cmake --build build/modes/clang-ci-family-incremental --parallel 4 --target exchange-api-probe exchange-feed-race exchange-bbo-reconstruction-probe
+          python3 tools/Ci/FamilyCiController.py stage-artifact --repository "$GITHUB_REPOSITORY" --snapshot-json "$FAMILY_SNAPSHOT_JSON" --snapshot-id "$FAMILY_REPOSITORY_SNAPSHOT_ID" --artifact-path "$GITHUB_WORKSPACE/source/family-ci-v3/CXETCPP/build/modes/clang-ci-family-incremental"
 
   test-build:
     name: test-build
@@ -353,12 +356,9 @@ jobs:
           npm test
 
   sanitizer-address-undefined:
-    continue-on-error: true
     name: sanitizer / address-undefined
-    if: >-
-      needs.snapshot.outputs.mode == 'own' &&
-      needs.production-build.result == 'success' && needs.web-build.result == 'success'
-    needs: [snapshot, production-build, web-build]
+    if: needs.root-integration-build.result == 'success'
+    needs: [snapshot, root-integration-build]
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 240
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -448,7 +448,7 @@ jobs:
 
   publish-ready:
     name: publish-ready
-    needs: [snapshot, prepare, production-build, root-integration-build, web-build, test-build, protocol-tests, safety-tests, research-tests, race-semantics-tests, race-venue-tests, race-transport-tests, race-report-tests, web-tests]
+    needs: [snapshot, prepare, production-build, root-integration-build, web-build, test-build, protocol-tests, safety-tests, research-tests, race-semantics-tests, race-venue-tests, race-transport-tests, race-report-tests, web-tests, sanitizer-address-undefined]
     if: >-
       always() && github.event_name == 'repository_dispatch' && needs.snapshot.result == 'success' &&
       needs.prepare.result == 'success' &&
@@ -463,7 +463,8 @@ jobs:
       needs.race-venue-tests.result == 'success' &&
       needs.race-transport-tests.result == 'success' &&
       needs.race-report-tests.result == 'success' &&
-      (needs.web-tests.result == 'success' || (needs.snapshot.outputs.mode == 'dependency' && needs.web-tests.result == 'skipped'))
+      (needs.web-tests.result == 'success' || (needs.snapshot.outputs.mode == 'dependency' && needs.web-tests.result == 'skipped')) &&
+      needs.sanitizer-address-undefined.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
     defaults:
       run: {shell: bash}
@@ -524,11 +525,11 @@ jobs:
 
   publish-checks-failed:
     name: publish-checks-failed
-    needs: [snapshot, prepare, production-build, root-integration-build, web-build, test-build, protocol-tests, safety-tests, research-tests, race-semantics-tests, race-venue-tests, race-transport-tests, race-report-tests, web-tests]
+    needs: [snapshot, prepare, production-build, root-integration-build, web-build, test-build, protocol-tests, safety-tests, research-tests, race-semantics-tests, race-venue-tests, race-transport-tests, race-report-tests, web-tests, sanitizer-address-undefined]
     if: >-
       always() && github.event_name == 'repository_dispatch' && needs.snapshot.result == 'success' &&
       !(needs.prepare.result == 'failure' || needs.prepare.result == 'cancelled' || needs.production-build.result == 'failure' || needs.production-build.result == 'cancelled' || needs.root-integration-build.result == 'failure' || needs.root-integration-build.result == 'cancelled' || needs.web-build.result == 'failure' || needs.web-build.result == 'cancelled') &&
-      (needs.test-build.result == 'failure' || needs.test-build.result == 'cancelled' || needs.protocol-tests.result == 'failure' || needs.protocol-tests.result == 'cancelled' || needs.safety-tests.result == 'failure' || needs.safety-tests.result == 'cancelled' || needs.research-tests.result == 'failure' || needs.research-tests.result == 'cancelled' || needs.race-semantics-tests.result == 'failure' || needs.race-semantics-tests.result == 'cancelled' || needs.race-venue-tests.result == 'failure' || needs.race-venue-tests.result == 'cancelled' || needs.race-transport-tests.result == 'failure' || needs.race-transport-tests.result == 'cancelled' || needs.race-report-tests.result == 'failure' || needs.race-report-tests.result == 'cancelled' || needs.web-tests.result == 'failure' || needs.web-tests.result == 'cancelled')
+      (needs.test-build.result == 'failure' || needs.test-build.result == 'cancelled' || needs.protocol-tests.result == 'failure' || needs.protocol-tests.result == 'cancelled' || needs.safety-tests.result == 'failure' || needs.safety-tests.result == 'cancelled' || needs.research-tests.result == 'failure' || needs.research-tests.result == 'cancelled' || needs.race-semantics-tests.result == 'failure' || needs.race-semantics-tests.result == 'cancelled' || needs.race-venue-tests.result == 'failure' || needs.race-venue-tests.result == 'cancelled' || needs.race-transport-tests.result == 'failure' || needs.race-transport-tests.result == 'cancelled' || needs.race-report-tests.result == 'failure' || needs.race-report-tests.result == 'cancelled' || needs.web-tests.result == 'failure' || needs.web-tests.result == 'cancelled' || needs.sanitizer-address-undefined.result == 'failure' || needs.sanitizer-address-undefined.result == 'cancelled')
     runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
     defaults:
       run: {shell: bash}
