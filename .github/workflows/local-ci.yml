@@ -29,7 +29,7 @@ env:
 
 jobs:
   snapshot:
-    name: snapshot
+    name: snapshot-contract
     runs-on: [self-hosted, linux, x64, wsl, local-control, test-exchanges-helper]
     timeout-minutes: 10
     outputs:
@@ -356,7 +356,7 @@ jobs:
           npm test
 
   sanitizer-address-undefined:
-    name: sanitizer / address-undefined
+    name: sanitizer-address-undefined
     if: needs.root-integration-build.result == 'success'
     needs: [snapshot, root-integration-build]
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
