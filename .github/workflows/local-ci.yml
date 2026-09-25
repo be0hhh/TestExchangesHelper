@@ -193,6 +193,9 @@ jobs:
   test-build:
     name: test-build
     needs: [snapshot, root-integration-build]
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.root-integration-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 180
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -213,6 +216,9 @@ jobs:
   protocol-tests:
     name: tests / protocol-contracts
     needs: [snapshot, test-build]
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.test-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 30
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -228,6 +234,9 @@ jobs:
   safety-tests:
     name: tests / redaction-and-codecs
     needs: [snapshot, test-build]
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.test-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 30
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -243,6 +252,9 @@ jobs:
   research-tests:
     name: tests / comparison-and-research
     needs: [snapshot, test-build]
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.test-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 30
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -258,6 +270,9 @@ jobs:
   race-semantics-tests:
     name: tests / race-contract-and-semantics
     needs: [snapshot, test-build]
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.test-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 45
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -273,6 +288,9 @@ jobs:
   race-venue-tests:
     name: tests / race-catalog-and-venues
     needs: [snapshot, test-build]
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.test-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 45
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -288,6 +306,9 @@ jobs:
   race-transport-tests:
     name: tests / race-transport
     needs: [snapshot, test-build]
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.test-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 45
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -303,6 +324,9 @@ jobs:
   race-report-tests:
     name: tests / reports-and-reconstruction
     needs: [snapshot, test-build]
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.test-build.result == 'success'
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 45
     defaults: {run: {shell: "/home/gha-runner/github-actions/bin/gha-heavy-shell {0}"}}
@@ -357,7 +381,9 @@ jobs:
 
   sanitizer-address-undefined:
     name: sanitizer-address-undefined
-    if: needs.root-integration-build.result == 'success'
+    if: >-
+      !cancelled() && needs.snapshot.result == 'success' &&
+      needs.root-integration-build.result == 'success'
     needs: [snapshot, root-integration-build]
     runs-on: [self-hosted, linux, x64, wsl, local-ci, test-exchanges-helper]
     timeout-minutes: 240
