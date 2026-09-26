@@ -1,4 +1,5 @@
 #include "exchange_probe/App.hpp"
+#include "exchange_probe/Research.hpp"
 #include "NetCommon.hpp"
 
 #include <boost/asio/io_context.hpp>
@@ -36,8 +37,7 @@
 namespace exchange_probe {
 namespace {
 
-inline constexpr std::string_view kBundleSchema =
-    "exchange.api_probe.bundle.v2";
+inline constexpr std::string_view kBundleSchema = kResearchBundleSchema;
 inline constexpr std::string_view kPercentileMethod =
     "bounded_log16_subbucket_histogram_upper_bound";
 inline constexpr std::size_t kHistogramLinearBuckets = 16U;
@@ -304,8 +304,18 @@ class BundleWriter {
       Command command) {
     boost::json::object manifest{
         {"schema", kBundleSchema},
-        {"schema_version", 2},
+        {"schema_version", 3},
+        {"run_id", directory_.string()},
         {"owner", command_name(command)},
+        {"status", "running"},
+        {"artifact_complete", false},
+        {"clock_domains",
+         boost::json::object{
+             {"local_monotonic", "nanoseconds_from_run_start"},
+             {"local_utc", "unix_epoch_nanoseconds"},
+             {"exchange_event", "profile_declared_or_null"},
+             {"exchange_transaction", "profile_declared_or_null"},
+         }},
         {"host", host_name()},
         {"mode", mode_name(options.placement_mode)},
         {"surface", to_string(options.surface.value_or(Surface::Public))},
@@ -360,14 +370,25 @@ class BundleWriter {
              {"reason", "exchange_timestamp_contract_not_declared"},
          }},
     };
-    std::ofstream file{directory_ / "manifest.json", std::ios::binary};
-    file << boost::json::serialize(manifest) << '\n';
-    file.flush();
-    if (!file) {
+    manifest_ = std::move(manifest);
+    if (!persist_manifest()) {
       error_ = "manifest_write_failed";
       return false;
     }
     return true;
+  }
+
+  [[nodiscard]] bool persist_manifest() const {
+    const auto temporary = directory_ / "manifest.json.tmp";
+    std::ofstream file{temporary, std::ios::binary};
+    file << boost::json::serialize(manifest_) << '\n';
+    file.flush();
+    if (!file) return false;
+    file.close();
+    std::error_code rename_error;
+    std::filesystem::rename(temporary, directory_ / "manifest.json",
+                            rename_error);
+    return !rename_error;
   }
 
   void append(
@@ -459,7 +480,7 @@ class BundleWriter {
     }
     boost::json::object summary{
         {"schema", kBundleSchema},
-        {"schema_version", 2},
+        {"schema_version", 3},
         {"owner", command_name(command)},
         {"artifact_complete", artifact_complete_},
         {"samples", histogram_.count},
@@ -530,6 +551,11 @@ class BundleWriter {
     svg.flush();
     storage_failed_ =
         storage_failed_ || !summary_file || !report || !svg;
+    manifest_["artifact_complete"] = artifact_complete_ && !storage_failed_;
+    manifest_["status"] = storage_failed_
+                              ? "failed"
+                              : (artifact_complete_ ? "complete" : "incomplete");
+    storage_failed_ = storage_failed_ || !persist_manifest();
     output_ << "bundle=" << directory_.string()
             << " samples=" << histogram_.count
             << " failures=" << histogram_.failures
@@ -543,6 +569,7 @@ class BundleWriter {
 
  private:
   std::filesystem::path directory_;
+  boost::json::object manifest_;
   std::uint64_t byte_limit_{0U};
   std::uint64_t bytes_written_{0U};
   std::uint64_t samples_not_persisted_{0U};

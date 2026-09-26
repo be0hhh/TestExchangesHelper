@@ -1,4 +1,5 @@
 #include "exchange_probe/App.hpp"
+#include "exchange_probe/Research.hpp"
 
 #include <boost/json/array.hpp>
 #include <boost/json/object.hpp>
@@ -21,8 +22,7 @@ namespace exchange_probe {
 namespace {
 
 inline constexpr std::size_t kMaxCompareFileBytes = 8U * 1024U * 1024U;
-inline constexpr std::string_view kBundleSchema =
-    "exchange.api_probe.bundle.v2";
+inline constexpr std::string_view kBundleSchema = kResearchBundleSchema;
 
 struct Candidate {
   std::filesystem::path bundle;
@@ -138,8 +138,32 @@ struct Candidate {
     return std::nullopt;
   }
   if (string_member(*summary, "schema") != kBundleSchema ||
-      string_member(*manifest, "schema") != kBundleSchema) {
+      string_member(*manifest, "schema") != kBundleSchema ||
+      u64_member(*summary, "schema_version") != 3U ||
+      u64_member(*manifest, "schema_version") != 3U) {
     error = "incompatible_bundle_schema";
+    return std::nullopt;
+  }
+  const auto* clock_domains = manifest->if_contains("clock_domains");
+  const auto status = string_member(*manifest, "status");
+  if (string_member(*manifest, "run_id").empty() ||
+      !(status == "complete" || status == "incomplete" || status == "failed") ||
+      clock_domains == nullptr || !clock_domains->is_object() ||
+      string_member(clock_domains->as_object(), "local_monotonic") !=
+          "nanoseconds_from_run_start" ||
+      string_member(clock_domains->as_object(), "local_utc") !=
+          "unix_epoch_nanoseconds" ||
+      string_member(clock_domains->as_object(), "exchange_event") !=
+          "profile_declared_or_null" ||
+      string_member(clock_domains->as_object(), "exchange_transaction") !=
+          "profile_declared_or_null" ||
+      !manifest->if_contains("artifact_complete") ||
+      !manifest->at("artifact_complete").is_bool() ||
+      manifest->at("artifact_complete").as_bool() !=
+          bool_member(*summary, "artifact_complete") ||
+      (status == "complete") !=
+          manifest->at("artifact_complete").as_bool()) {
+    error = "invalid_bundle_manifest";
     return std::nullopt;
   }
 

@@ -331,6 +331,5 @@ order-path latency.
 
 ## Bundle compatibility
 
-Research accepts only `exchange.api_probe.bundle.v3`. Older prefixed bundle
-formats are deliberately not migrated or silently read. The legacy profiler
-and compare path use neutral `exchange.api_probe.bundle.v2`.
+Research and profiler bundles use `exchange.api_probe.bundle.v3`. Older bundle
+formats are deliberately not migrated or silently read by compare.

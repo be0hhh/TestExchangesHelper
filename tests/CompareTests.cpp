@@ -65,13 +65,27 @@ void write_bundle(
     std::string_view route,
     std::uint64_t p50_us,
     std::uint64_t p99_us,
-    double jitter_us) {
+    double jitter_us,
+    std::uint64_t schema_version = 3U) {
+  const auto schema = schema_version == 3U
+                          ? "exchange.api_probe.bundle.v3"
+                          : "exchange.api_probe.bundle.v2";
   write_json(
       directory / "manifest.json",
       {
-          {"schema", "exchange.api_probe.bundle.v2"},
-          {"schema_version", 2},
+          {"schema", schema},
+          {"schema_version", schema_version},
+          {"run_id", directory.string()},
           {"owner", "latency"},
+          {"status", "complete"},
+          {"artifact_complete", true},
+          {"clock_domains",
+           boost::json::object{
+               {"local_monotonic", "nanoseconds_from_run_start"},
+               {"local_utc", "unix_epoch_nanoseconds"},
+               {"exchange_event", "profile_declared_or_null"},
+               {"exchange_transaction", "profile_declared_or_null"},
+           }},
           {"host", "test-host"},
           {"route", std::string{route}},
           {"connection_requested", "cold"},
@@ -80,8 +94,8 @@ void write_bundle(
   write_json(
       directory / "summary.json",
       {
-          {"schema", "exchange.api_probe.bundle.v2"},
-          {"schema_version", 2},
+          {"schema", schema},
+          {"schema_version", schema_version},
           {"owner", "latency"},
           {"artifact_complete", true},
           {"samples", 5},
@@ -130,6 +144,15 @@ int main() {
           nonnegative_integer(
               candidates[1].as_object().at("pareto_front")) == 1U,
       "trade-off candidates share first front");
+
+  const auto old_bundle = root / "old_bundle";
+  write_bundle(old_bundle, "natural", 50U, 100U, 10.0, 2U);
+  options.inputs = {old_bundle, natural};
+  output.str({});
+  errors.str({});
+  require(run_compare(options, output, errors) == 2, "old bundle is rejected");
+  require(errors.str().find("incompatible_bundle_schema") != std::string::npos,
+          "old bundle reports incompatible schema");
 
   std::error_code cleanup_error;
   std::filesystem::remove_all(root, cleanup_error);
