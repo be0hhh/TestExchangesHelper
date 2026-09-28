@@ -210,8 +210,11 @@ the exact available CXET public RuntimeV1 routes. Unsupported CXET variants
 remain explicit; nominal depth parameters cannot substitute for the actual
 subscription payload. No production APIs or routes are changed.
 
+Run these commands from the CXETCPP root, which composes the required CXET and
+trading-core targets:
+
 ```bash
-cmake -S . -B build -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
+cmake -S . -B build -DCXET_FULL_BUILD=OFF -DCXET_FAMILY_SOURCE_GRAPH=ON -DCXET_EXCHANGE_FEED_RACE_BUILD=ON
 cmake --build build --target binance-feed-cadence binance-cadence-tests -j 4
 ctest --test-dir build -R '^binance-cadence-tests$' --output-on-failure
 python3 tools/exchange_api_probe/tests/CadenceAnalysisTests.py

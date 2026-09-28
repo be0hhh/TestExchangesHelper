@@ -9,7 +9,7 @@ namespace exchange_probe::reconstruction {
 namespace {
 
 using CoreOrigin =
-    cxet::composite::BboReconstructionTimestampOrigin;
+    trading_core::BboReconstructionTimestampOrigin;
 
 [[nodiscard]] CoreOrigin coreOrigin(TimestampOrigin origin) noexcept {
   if (origin == TimestampOrigin::Exchange) return CoreOrigin::Exchange;
@@ -35,8 +35,8 @@ bool Analyzer::configure(std::int64_t tickSizeRaw,
   policy_ = policy;
   Price tick{};
   tick.raw = tickSizeRaw;
-  return cxet::composite::configureBboReconstruction(state_, tick) &&
-         cxet::composite::configureBboReconstruction(rawBbo_, tick);
+  return trading_core::configureBboReconstruction(state_, tick) &&
+         trading_core::configureBboReconstruction(rawBbo_, tick);
 }
 
 bool Analyzer::apply(const Observation& observation) noexcept {
@@ -57,8 +57,8 @@ bool Analyzer::apply(const Observation& observation) noexcept {
     return true;
   }
   if (observation.kind == ObservationKind::Reset) {
-    cxet::composite::resetBboReconstruction(state_);
-    cxet::composite::resetBboReconstruction(rawBbo_);
+    trading_core::resetBboReconstruction(state_);
+    trading_core::resetBboReconstruction(rawBbo_);
     pending_ = {};
     pendingComparison_ = false;
     pendingComparisonUsesExchangeTime_ = false;
@@ -91,14 +91,14 @@ bool Analyzer::applyBookTickerSide(
       : cxet::composite::BookTickerSideAction::Delete;
   rawUpdate.level.px.raw = observation.priceRaw;
   rawUpdate.level.qty.raw = observation.qtyRaw;
-  if (!cxet::composite::applyBboReconstructionBookTickerSide(
+  if (!trading_core::applyBboReconstructionBookTickerSide(
           rawBbo_, rawUpdate, coreOrigin(observation.timestampOrigin))) {
     return false;
   }
 
-  const auto rawView = cxet::composite::bboReconstructionView(rawBbo_);
+  const auto rawView = trading_core::bboReconstructionView(rawBbo_);
   if (observation.coalesceNext == 0u &&
-      cxet::composite::validBboReconstruction(rawView)) {
+      trading_core::validBboReconstruction(rawView)) {
     comparePending(observation, rawView.bookTicker.bid.px.raw,
                    rawView.bookTicker.ask.px.raw, false);
   }
@@ -121,7 +121,7 @@ bool Analyzer::applyBookTickerSide(
     origin = CoreOrigin::Exchange;
   }
   if (update.ts.raw == 0u) return false;
-  return cxet::composite::applyBboReconstructionBookTickerSide(
+  return trading_core::applyBboReconstructionBookTickerSide(
       state_, update, origin);
 }
 
@@ -186,8 +186,8 @@ bool Analyzer::applyTrade(const Observation& observation) noexcept {
     return false;
   }
 
-  const auto before = cxet::composite::bboReconstructionView(state_);
-  if (!cxet::composite::validBboReconstruction(before)) {
+  const auto before = trading_core::bboReconstructionView(state_);
+  if (!trading_core::validBboReconstruction(before)) {
     ++counters_.rejectedTrades;
     return false;
   }
@@ -198,7 +198,7 @@ bool Analyzer::applyTrade(const Observation& observation) noexcept {
       isBuy ? before.bookTicker.ask.qty.raw : before.bookTicker.bid.qty.raw;
   const bool touchQtyKnown =
       (isBuy ? before.askQtyKnown.raw : before.bidQtyKnown.raw) ==
-      cxet::composite::kBboReconstructionFlagTrue.raw;
+      trading_core::kBboReconstructionFlagTrue.raw;
   ReconstructionMode mode = ReconstructionMode::Reverse;
   if (observation.priceRaw == touchPrice) {
     mode = ReconstructionMode::Nibbling;
@@ -219,7 +219,7 @@ bool Analyzer::applyTrade(const Observation& observation) noexcept {
     trade.ts.raw = nextLogical(logicalTimestamp_);
   }
   if (trade.ts.raw == 0u ||
-      !cxet::composite::applyBboReconstructionKnownInitiatorTrade(
+      !trading_core::applyBboReconstructionKnownInitiatorTrade(
           state_, trade, origin)) {
     ++counters_.rejectedTrades;
     return false;
@@ -238,7 +238,7 @@ bool Analyzer::applyTrade(const Observation& observation) noexcept {
     lastRawTradeExchangeTimestamp_ = observation.exchangeTimestampNs;
   }
   lastRawTradeReceiveTimestamp_ = observation.receiveMonotonicNs;
-  pending_ = cxet::composite::bboReconstructionView(state_);
+  pending_ = trading_core::bboReconstructionView(state_);
   pendingComparison_ = true;
   pendingComparisonUsesExchangeTime_ =
       policy_ == ReconstructionPolicy::StrictExchange ||

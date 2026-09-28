@@ -2,7 +2,7 @@
 
 #include "exchange_probe/race/Match.hpp"
 
-#include "cxet/Primitives/Composite/BboReconstruction.hpp"
+#include "trading_core/Algorithm/Market/BboReconstruction.hpp"
 
 #include <array>
 #include <cstddef>
@@ -102,7 +102,7 @@ class ExistingTradeBbo {
       std::uint64_t parentRecvMonoNs, BboState& output) noexcept;
 
  private:
-  cxet::composite::BboReconstructionState state_{};
+  trading_core::BboReconstructionState state_{};
 };
 
 }  // namespace exchange_probe::race

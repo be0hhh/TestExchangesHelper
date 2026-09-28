@@ -2,7 +2,7 @@
 
 #include "exchange_probe/reconstruction/Types.hpp"
 
-#include "cxet/Primitives/Composite/BboReconstruction.hpp"
+#include "trading_core/Algorithm/Market/BboReconstruction.hpp"
 
 namespace exchange_probe::reconstruction {
 
@@ -16,8 +16,8 @@ class Analyzer final {
   [[nodiscard]] const AnalysisCounters& counters() const noexcept {
     return counters_;
   }
-  [[nodiscard]] cxet::composite::BboReconstructionView view() const noexcept {
-    return cxet::composite::bboReconstructionView(state_);
+  [[nodiscard]] trading_core::BboReconstructionView view() const noexcept {
+    return trading_core::bboReconstructionView(state_);
   }
 
  private:
@@ -29,9 +29,9 @@ class Analyzer final {
                       std::int64_t askPriceRaw,
                       bool depth) noexcept;
 
-  cxet::composite::BboReconstructionState state_{};
-  cxet::composite::BboReconstructionState rawBbo_{};
-  cxet::composite::BboReconstructionView pending_{};
+  trading_core::BboReconstructionState state_{};
+  trading_core::BboReconstructionState rawBbo_{};
+  trading_core::BboReconstructionView pending_{};
   AnalysisCounters counters_{};
   ReconstructionPolicy policy_{ReconstructionPolicy::StrictExchange};
   std::uint64_t logicalTimestamp_{0u};

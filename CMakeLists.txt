@@ -77,9 +77,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 if(CXET_EXCHANGE_FEED_RACE_BUILD)
-    if(NOT TARGET cxet::cxet_lib OR NOT TARGET cxet::read_only_contracts)
+    if(NOT TARGET cxet::cxet_lib OR NOT TARGET cxet::read_only_contracts OR
+       NOT TARGET trading_core::algorithm)
         message(FATAL_ERROR
-            "exchange-feed-race requires the CXET root source graph")
+            "exchange-feed-race requires the CXET family source graph")
     endif()
     add_executable(binance-feed-cadence
         src/CadenceMain.cpp src/CadenceCommon.cpp src/CadenceDirect.cpp
@@ -128,15 +129,8 @@ if(CXET_EXCHANGE_FEED_RACE_BUILD)
             exchange_probe_lib
             cxet::cxet_lib
             cxet::read_only_contracts
+            trading_core::algorithm
     )
-    if(TARGET trading_core::algorithm)
-        target_link_libraries(exchange_feed_race_lib PUBLIC trading_core::algorithm)
-        target_compile_definitions(exchange_feed_race_lib
-            PUBLIC EXCHANGE_FEED_RACE_HAS_RECONSTRUCTION=1)
-    else()
-        target_compile_definitions(exchange_feed_race_lib
-            PUBLIC EXCHANGE_FEED_RACE_HAS_RECONSTRUCTION=0)
-    endif()
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(exchange_feed_race_lib PRIVATE
             -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
@@ -159,6 +153,7 @@ if(CXET_EXCHANGE_FEED_RACE_BUILD)
         PUBLIC
             cxet::cxet_lib
             cxet::read_only_contracts
+            trading_core::algorithm
     )
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(exchange_bbo_reconstruction_probe_lib PRIVATE

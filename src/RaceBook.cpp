@@ -192,11 +192,11 @@ std::uint64_t BoundedLocalBook::top_fingerprint(
 bool ExistingTradeBbo::configure(std::int64_t tickSize) noexcept {
   Price value{};
   value.raw = tickSize;
-  return cxet::composite::configureBboReconstruction(state_, value);
+  return trading_core::configureBboReconstruction(state_, value);
 }
 
 void ExistingTradeBbo::reset() noexcept {
-  cxet::composite::resetBboReconstruction(state_);
+  trading_core::resetBboReconstruction(state_);
 }
 
 bool ExistingTradeBbo::seed(
@@ -207,9 +207,9 @@ bool ExistingTradeBbo::seed(
   input.bid.qty.raw = bbo.bidQuantity;
   input.ask.px.raw = bbo.askPrice;
   input.ask.qty.raw = bbo.askQuantity;
-  return cxet::composite::applyBboReconstructionBookTicker(
+  return trading_core::applyBboReconstructionBookTicker(
       state_, input,
-      cxet::composite::BboReconstructionTimestampOrigin::Exchange);
+      trading_core::BboReconstructionTimestampOrigin::Exchange);
 }
 
 bool ExistingTradeBbo::apply_trade(
@@ -221,13 +221,13 @@ bool ExistingTradeBbo::apply_trade(
   trade.price.raw = price;
   trade.qty.raw = quantity;
   trade.side = aggressorSide == 1u ? Side::Buy() : Side::Sell();
-  if (!cxet::composite::applyBboReconstructionKnownInitiatorTrade(
+  if (!trading_core::applyBboReconstructionKnownInitiatorTrade(
           state_, trade,
-          cxet::composite::BboReconstructionTimestampOrigin::Exchange)) {
+          trading_core::BboReconstructionTimestampOrigin::Exchange)) {
     return false;
   }
-  const auto view = cxet::composite::bboReconstructionView(state_);
-  if (!cxet::composite::validBboReconstruction(view)) return false;
+  const auto view = trading_core::bboReconstructionView(state_);
+  if (!trading_core::validBboReconstruction(view)) return false;
   output = BboState{
       .bidPrice = view.bookTicker.bid.px.raw,
       .bidQuantity = view.bookTicker.bid.qty.raw,
