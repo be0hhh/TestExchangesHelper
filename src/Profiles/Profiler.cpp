@@ -1,6 +1,6 @@
 #include "exchange_probe/App.hpp"
 #include "exchange_probe/Research.hpp"
-#include "NetCommon.hpp"
+#include "../Network/NetCommon.hpp"
 
 #include <boost/asio/io_context.hpp>
 #include <boost/json/array.hpp>

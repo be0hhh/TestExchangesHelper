@@ -1,7 +1,7 @@
 #include "exchange_probe/App.hpp"
 
 #include "exchange_probe/Net.hpp"
-#include "NetCommon.hpp"
+#include "../Network/NetCommon.hpp"
 
 #include <boost/asio/ssl/context.hpp>
 #include <boost/json/parse.hpp>
