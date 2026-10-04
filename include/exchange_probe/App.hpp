@@ -29,11 +29,6 @@ enum class DiscoveryMode {
   High,
 };
 
-enum class PlacementPath {
-  Direct,
-  Proxy,
-};
-
 enum class RouteMode {
   Natural,
   Pinned,
@@ -51,7 +46,6 @@ struct CliOptions {
   std::optional<std::filesystem::path> env_file;
   RunLimits limits;
   DiscoveryMode discovery_mode{DiscoveryMode::Standard};
-  PlacementPath placement_path{PlacementPath::Direct};
   RouteMode route_mode{RouteMode::Natural};
   std::optional<unsigned> duration_seconds;
   std::uint64_t max_artifact_bytes{kDefaultArtifactBytes};
@@ -93,23 +87,20 @@ void print_help(std::ostream& output);
     const ProductSpec& product,
     const RestCase& probe_case,
     const RunLimits& limits,
-    const std::optional<std::string>& pinned_ip = std::nullopt,
-    const std::optional<bool>& use_proxy = std::nullopt);
+    const std::optional<std::string>& pinned_ip = std::nullopt);
 
 [[nodiscard]] Observation run_private_rest(
     const ProductSpec& product,
     const RestCase& probe_case,
     const Credentials& credentials,
     const RunLimits& limits,
-    const std::optional<std::string>& pinned_ip = std::nullopt,
-    const std::optional<bool>& use_proxy = std::nullopt);
+    const std::optional<std::string>& pinned_ip = std::nullopt);
 
 [[nodiscard]] Observation run_public_ws(
     const ProductSpec& product,
     const WsCase& probe_case,
     const RunLimits& limits,
-    const std::optional<std::string>& pinned_ip = std::nullopt,
-    const std::optional<bool>& use_proxy = std::nullopt);
+    const std::optional<std::string>& pinned_ip = std::nullopt);
 
 [[nodiscard]] boost::json::object capability_json(
     const ProductSpec& product,

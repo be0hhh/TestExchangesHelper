@@ -29,8 +29,7 @@ HttpResult execute_http(
     const RestCase& probe_case,
     std::chrono::steady_clock::time_point deadline,
     const std::optional<SignedRequest>& signed_request,
-    const std::optional<std::string>& pinned_ip,
-    const std::optional<bool>& use_proxy) {
+    const std::optional<std::string>& pinned_ip) {
   namespace asio = boost::asio;
   namespace beast = boost::beast;
   namespace http = beast::http;
@@ -56,28 +55,6 @@ HttpResult execute_http(
         ssl::context::no_sslv2 |
         ssl::context::no_sslv3);
 
-    auto proxy = proxy_for_host(probe_case.host);
-    if (use_proxy.has_value() && !*use_proxy) {
-      proxy = {};
-    }
-    if (use_proxy.value_or(false) && !proxy.enabled) {
-      result.stage = "proxy_configuration";
-      result.error = "proxy_not_configured";
-      return finish();
-    }
-    if (proxy.enabled && !proxy.valid) {
-      result.stage = "proxy_configuration";
-      result.error = proxy.error;
-      return finish();
-    }
-    if (proxy.enabled && pinned_ip.has_value()) {
-      result.stage = "route_configuration";
-      result.error = "pinned_route_unavailable_through_proxy";
-      return finish();
-    }
-    const auto& connect_host = proxy.enabled ? proxy.host : probe_case.host;
-    const auto& connect_port = proxy.enabled ? proxy.port : std::string{"443"};
-
     result.stage = "dns";
     net_detail::ResolveResult resolved;
     std::optional<asio::ip::tcp::endpoint> pinned_endpoint;
@@ -92,8 +69,8 @@ HttpResult execute_http(
     } else {
       resolved = net_detail::resolve(
           context,
-          connect_host,
-          connect_port,
+          probe_case.host,
+          "443",
           deadline);
       if (!resolved.ok) {
         result.error = resolved.error;
@@ -102,7 +79,7 @@ HttpResult execute_http(
     }
 
     net_detail::TlsStream stream{context, tls_context};
-    result.stage = proxy.enabled ? "proxy_tcp_connect" : "tcp_connect";
+    result.stage = "tcp_connect";
     const bool connected =
         pinned_endpoint.has_value()
             ? net_detail::connect_endpoint(
@@ -120,20 +97,6 @@ HttpResult execute_http(
     if (!connected) {
       return finish();
     }
-    if (proxy.enabled) {
-      result.stage = "proxy_connect";
-      if (!net_detail::establish_proxy_tunnel(
-              context,
-              beast::get_lowest_layer(stream),
-              proxy,
-              probe_case.host,
-              "443",
-              deadline,
-              result.error)) {
-        return finish();
-      }
-    }
-
     result.stage = "tls_configuration";
     if (!net_detail::configure_tls(stream, probe_case.host, result.error)) {
       return finish();

@@ -48,15 +48,6 @@ struct ResolveResult {
     std::chrono::steady_clock::time_point deadline,
     std::string& error);
 
-[[nodiscard]] bool establish_proxy_tunnel(
-    asio::io_context& context,
-    beast::tcp_stream& stream,
-    const ProxyConfig& proxy,
-    std::string_view destination_host,
-    std::string_view destination_port,
-    std::chrono::steady_clock::time_point deadline,
-    std::string& error);
-
 [[nodiscard]] bool configure_tls(
     TlsStream& stream,
     std::string_view host,

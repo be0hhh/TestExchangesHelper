@@ -192,8 +192,7 @@ void close_socket(WebSocket& stream) noexcept {
 WsResult observe_ws(
     const WsCase& probe_case,
     std::chrono::steady_clock::time_point deadline,
-    const std::optional<std::string>& pinned_ip,
-    const std::optional<bool>& use_proxy) {
+    const std::optional<std::string>& pinned_ip) {
   WsResult result{};
   const auto finish = [&]() {
     return std::move(result);
@@ -213,27 +212,6 @@ WsResult observe_ws(
         ssl::context::no_sslv2 |
         ssl::context::no_sslv3);
 
-    auto proxy = proxy_for_host(probe_case.host);
-    if (use_proxy.has_value() && !*use_proxy) {
-      proxy = {};
-    }
-    if (use_proxy.value_or(false) && !proxy.enabled) {
-      result.protocol_stage = "proxy_configuration";
-      result.error = "proxy_not_configured";
-      return finish();
-    }
-    if (proxy.enabled && !proxy.valid) {
-      result.protocol_stage = "proxy_configuration";
-      result.error = proxy.error;
-      return finish();
-    }
-    if (proxy.enabled && pinned_ip.has_value()) {
-      result.protocol_stage = "route_configuration";
-      result.error = "pinned_route_unavailable_through_proxy";
-      return finish();
-    }
-    const auto& connect_host = proxy.enabled ? proxy.host : probe_case.host;
-    const auto& connect_port = proxy.enabled ? proxy.port : std::string{"443"};
     result.protocol_stage = "dns";
     net_detail::ResolveResult resolved;
     std::optional<asio::ip::tcp::endpoint> pinned_endpoint;
@@ -248,8 +226,8 @@ WsResult observe_ws(
     } else {
       resolved = net_detail::resolve(
           context,
-          connect_host,
-          connect_port,
+          probe_case.host,
+          "443",
           deadline);
       if (!resolved.ok) {
         result.error = resolved.error;
@@ -259,8 +237,7 @@ WsResult observe_ws(
 
     WebSocket stream{context, tls_context};
     stream.read_message_max(kMaxWsMessageBytes);
-    result.protocol_stage =
-        proxy.enabled ? "proxy_tcp_connect" : "tcp_connect";
+    result.protocol_stage = "tcp_connect";
     const bool connected =
         pinned_endpoint.has_value()
             ? net_detail::connect_endpoint(
@@ -278,21 +255,6 @@ WsResult observe_ws(
     if (!connected) {
       return finish();
     }
-    if (proxy.enabled) {
-      result.protocol_stage = "proxy_connect";
-      if (!net_detail::establish_proxy_tunnel(
-              context,
-              beast::get_lowest_layer(stream),
-              proxy,
-              probe_case.host,
-              "443",
-              deadline,
-              result.error)) {
-        close_socket(stream);
-        return finish();
-      }
-    }
-
     result.protocol_stage = "tls_configuration";
     if (!net_detail::configure_tls(
             stream.next_layer(),

@@ -65,10 +65,6 @@ using GeoCache = std::map<std::string, boost::json::value>;
              options.cases.end();
 }
 
-[[nodiscard]] std::string_view path_name(PlacementPath path) noexcept {
-  return path == PlacementPath::Direct ? "direct" : "proxy";
-}
-
 void emit(std::ostream& output, boost::json::object value) {
   value["schema_version"] = 2;
   output << boost::json::serialize(value) << '\n';
@@ -166,7 +162,6 @@ void emit(std::ostream& output, boost::json::object value) {
 [[nodiscard]] Reachability transport_reachability(
     const Endpoint& endpoint,
     const std::optional<asio::ip::tcp::endpoint>& target,
-    PlacementPath path,
     std::chrono::milliseconds timeout) {
   const auto start = std::chrono::steady_clock::now();
   Reachability result;
@@ -185,45 +180,22 @@ void emit(std::ostream& output, boost::json::object value) {
     net_detail::TlsStream stream{context, tls_context};
     const auto deadline = start + timeout;
     result.stage = "tcp_connect";
-    if (path == PlacementPath::Direct) {
-      if (target.has_value()) {
-        if (!net_detail::connect_endpoint(
-                context, beast::get_lowest_layer(stream), *target, deadline,
-                result.error)) {
-          return result;
-        }
-      } else {
-        const auto resolved = net_detail::resolve(
-            context, endpoint.host, std::to_string(endpoint.port), deadline);
-        if (!resolved.ok) {
-          result.stage = "dns";
-          result.error = resolved.error;
-          return result;
-        }
-        if (!net_detail::connect(context, beast::get_lowest_layer(stream),
-                                 resolved.endpoints, deadline, result.error)) {
-          return result;
-        }
+    if (target.has_value()) {
+      if (!net_detail::connect_endpoint(
+              context, beast::get_lowest_layer(stream), *target, deadline,
+              result.error)) {
+        return result;
       }
     } else {
-      const auto proxy = proxy_for_host(endpoint.host);
-      if (!proxy.enabled || !proxy.valid) {
-        result.stage = "proxy_configuration";
-        result.error = proxy.enabled ? proxy.error : "proxy_not_configured";
+      const auto resolved = net_detail::resolve(
+          context, endpoint.host, std::to_string(endpoint.port), deadline);
+      if (!resolved.ok) {
+        result.stage = "dns";
+        result.error = resolved.error;
         return result;
       }
-      const auto proxy_targets = net_detail::resolve(context, proxy.host, proxy.port, deadline);
-      if (!proxy_targets.ok || !net_detail::connect(context, beast::get_lowest_layer(stream),
-                                                     proxy_targets.endpoints, deadline,
-                                                     result.error)) {
-        if (!proxy_targets.ok) result.error = proxy_targets.error;
-        return result;
-      }
-      if (!net_detail::establish_proxy_tunnel(context, beast::get_lowest_layer(stream),
-                                              proxy, endpoint.host,
-                                              std::to_string(endpoint.port), deadline,
-                                              result.error)) {
-        result.stage = "proxy_connect";
+      if (!net_detail::connect(context, beast::get_lowest_layer(stream),
+                               resolved.endpoints, deadline, result.error)) {
         return result;
       }
     }
@@ -377,7 +349,7 @@ int run_placement(const CliOptions& options,
     return 2;
   }
   emit(output, {{"kind", "placement_run"},
-                {"path", path_name(options.placement_path)},
+                {"path", "direct"},
                 {"surface", to_string(options.surface.value_or(Surface::Public))}});
 
   const auto& providers = options.geo_providers;
@@ -418,7 +390,7 @@ int run_placement(const CliOptions& options,
                     {"host", endpoint.host}, {"port", endpoint.port},
                     {"connected_ip", result.connected_ip},
                     {"ip_family", family},
-                    {"path", path_name(options.placement_path)},
+                    {"path", "direct"},
                     {"route", route}, {"target_ip_applied", pinned},
                     {"tcp_ok", result.tcp_ok}, {"tls_ok", result.tls_ok},
                     {"transport_metadata", transport_metadata_json(result.transport)},
@@ -430,20 +402,12 @@ int run_placement(const CliOptions& options,
     };
     if (options.route_mode != RouteMode::Pinned) {
       emit_reachability(transport_reachability(endpoint, std::nullopt,
-          options.placement_path, options.limits.timeout), "natural", {}, {});
+          options.limits.timeout), "natural", {}, {});
     }
     if (options.route_mode == RouteMode::Natural) continue;
-    if (options.placement_path == PlacementPath::Proxy) {
-      emit(output, {{"kind", "placement_route_unavailable"},
-                    {"venue", endpoint.venue}, {"product", endpoint.product},
-                    {"host", endpoint.host}, {"port", endpoint.port},
-                    {"route", "pinned"}, {"path", "proxy"},
-                    {"reason", "proxy_resolves_destination_host"}});
-      continue;
-    }
     for (const auto& [ip, target] : ips) {
       emit_reachability(transport_reachability(endpoint, target,
-          options.placement_path, options.limits.timeout), "pinned", ip,
+          options.limits.timeout), "pinned", ip,
           target.address().is_v6() ? "ipv6" : "ipv4");
       if (geolocated.insert(ip).second) {
         for (const auto& provider : providers) {

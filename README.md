@@ -168,8 +168,7 @@ the adapter JSONL contract.
 
 `matrix` lists declared capabilities; `sandbox` validates bounded protocol
 observations. `placement` reports endpoint/DNS/IP discovery and one bounded
-TCP/TLS reachability attempt per selected natural or pinned route. Proxy routes
-retain their real attribution; a proxy cannot apply a pinned destination IP.
+TCP/TLS reachability attempt per selected natural or pinned direct route.
 Results contain status, stage/error and connection identity, without timing
 series, ping, throughput, histograms or speed rankings.
 

@@ -78,7 +78,9 @@ void retainedCatalogCli() {
   CXET_CHECK(cli({"matrix", "--venue", "binance", "--jsonl"}).ok);
   CXET_CHECK(cli({"profile", "list"}).ok);
   CXET_CHECK(cli({"discover", "--venue", "binance", "--product", "spot"}).ok);
-  CXET_CHECK(cli({"placement", "--path", "direct", "--route", "pinned"}).ok);
+  CXET_CHECK(cli({"placement", "--route", "pinned"}).ok);
+  CXET_CHECK(!cli({"placement", "--path", "proxy"}).ok);
+  CXET_CHECK(!cli({"placement", "--path", "direct"}).ok);
   CXET_CHECK(cli({"research", "run", "--venue", "binance", "--product", "spot", "--duration-seconds", "1"}).ok);
   CXET_CHECK(!cli({"research", "run", "--venue", "binance", "--product", "spot", "--surface", "private"}).ok);
   std::ostringstream output;

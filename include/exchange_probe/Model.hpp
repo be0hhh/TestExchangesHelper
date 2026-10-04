@@ -61,7 +61,6 @@ enum class Outcome {
   ExpectedRejection,
   TransportError,
   TlsError,
-  ProxyError,
   HttpError,
   LogicalError,
   SchemaError,
@@ -301,15 +300,6 @@ struct Observation {
   std::string error;
   boost::json::value evidence;
   std::optional<std::string> raw_public;
-};
-
-struct ProxyConfig {
-  bool enabled{false};
-  bool valid{true};
-  std::string host;
-  std::string port;
-  std::string authorization;
-  std::string error;
 };
 
 struct RunLimits {

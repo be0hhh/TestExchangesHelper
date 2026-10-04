@@ -5,16 +5,12 @@
 #include <boost/asio/bind_executor.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/ssl/host_name_verification.hpp>
-#include <boost/beast/core/flat_buffer.hpp>
-#include <boost/beast/http.hpp>
 #include <boost/json/string.hpp>
 
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
 #include <algorithm>
-#include <cctype>
-#include <cstdlib>
 #include <string>
 #include <utility>
 #include <vector>
@@ -24,165 +20,6 @@
 #endif
 
 namespace exchange_probe {
-namespace {
-
-[[nodiscard]] std::string lowercase(std::string_view input) {
-  std::string result;
-  result.reserve(input.size());
-  for (const char value : input) {
-    result.push_back(static_cast<char>(
-        std::tolower(static_cast<unsigned char>(value))));
-  }
-  return result;
-}
-
-[[nodiscard]] std::string trim(std::string_view input) {
-  const auto first = input.find_first_not_of(" \t\r\n");
-  if (first == std::string_view::npos) {
-    return {};
-  }
-  const auto last = input.find_last_not_of(" \t\r\n");
-  return std::string{input.substr(first, last - first + 1)};
-}
-
-[[nodiscard]] bool no_proxy_match(
-    std::string_view host,
-    std::string_view rules) {
-  const auto normalized_host = lowercase(host);
-  std::size_t cursor = 0;
-  while (cursor <= rules.size()) {
-    const auto separator = rules.find(',', cursor);
-    auto token = trim(rules.substr(
-        cursor,
-        separator == std::string_view::npos
-            ? rules.size() - cursor
-            : separator - cursor));
-    token = lowercase(token);
-    const auto colon = token.rfind(':');
-    if (colon != std::string::npos &&
-        token.find(']') == std::string::npos) {
-      token.resize(colon);
-    }
-    if (token == "*" || token == normalized_host) {
-      return true;
-    }
-    if (!token.empty() && token.front() == '.') {
-      token.erase(token.begin());
-    }
-    if (!token.empty() && normalized_host.size() > token.size() &&
-        normalized_host.ends_with(token) &&
-        normalized_host[normalized_host.size() - token.size() - 1] == '.') {
-      return true;
-    }
-    if (separator == std::string_view::npos) {
-      break;
-    }
-    cursor = separator + 1;
-  }
-  return false;
-}
-
-[[nodiscard]] std::string environment_value(
-    const char* primary,
-    const char* secondary) {
-  if (const char* value = std::getenv(primary); value != nullptr && *value != '\0') {
-    return value;
-  }
-  if (const char* value = std::getenv(secondary); value != nullptr && *value != '\0') {
-    return value;
-  }
-  return {};
-}
-
-[[nodiscard]] std::string base64_basic(std::string_view value) {
-  static constexpr char table[] =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  std::string output;
-  output.reserve(4U * ((value.size() + 2U) / 3U));
-  std::size_t cursor = 0;
-  while (cursor < value.size()) {
-    const auto a = static_cast<unsigned char>(value[cursor++]);
-    const bool have_b = cursor < value.size();
-    const auto b =
-        have_b ? static_cast<unsigned char>(value[cursor++]) : 0U;
-    const bool have_c = cursor < value.size();
-    const auto c =
-        have_c ? static_cast<unsigned char>(value[cursor++]) : 0U;
-    const auto bits =
-        static_cast<unsigned>(a) << 16U |
-        static_cast<unsigned>(b) << 8U |
-        static_cast<unsigned>(c);
-    output.push_back(table[(bits >> 18U) & 0x3fU]);
-    output.push_back(table[(bits >> 12U) & 0x3fU]);
-    output.push_back(have_b ? table[(bits >> 6U) & 0x3fU] : '=');
-    output.push_back(have_c ? table[bits & 0x3fU] : '=');
-  }
-  return output;
-}
-
-}  // namespace
-
-ProxyConfig proxy_for_host(std::string_view host) {
-  const auto no_proxy =
-      environment_value("NO_PROXY", "no_proxy");
-  if (!no_proxy.empty() && no_proxy_match(host, no_proxy)) {
-    return {};
-  }
-  const auto raw = environment_value("HTTPS_PROXY", "https_proxy");
-  if (raw.empty()) {
-    return {};
-  }
-
-  ProxyConfig proxy{};
-  proxy.enabled = true;
-  constexpr std::string_view scheme = "http://";
-  if (!std::string_view{raw}.starts_with(scheme)) {
-    proxy.valid = false;
-    proxy.error = "only_http_connect_proxy_supported";
-    return proxy;
-  }
-  auto authority = std::string_view{raw}.substr(scheme.size());
-  if (const auto slash = authority.find('/'); slash != std::string_view::npos) {
-    authority = authority.substr(0, slash);
-  }
-  if (const auto at = authority.rfind('@'); at != std::string_view::npos) {
-    const auto credentials = authority.substr(0, at);
-    proxy.authorization = "Basic " + base64_basic(credentials);
-    authority = authority.substr(at + 1);
-  }
-  if (authority.empty()) {
-    proxy.valid = false;
-    proxy.error = "proxy_authority_missing";
-    return proxy;
-  }
-  if (authority.front() == '[') {
-    const auto close = authority.find(']');
-    if (close == std::string_view::npos) {
-      proxy.valid = false;
-      proxy.error = "proxy_ipv6_invalid";
-      return proxy;
-    }
-    proxy.host = std::string{authority.substr(1, close - 1)};
-    if (close + 1 < authority.size() && authority[close + 1] == ':') {
-      proxy.port = std::string{authority.substr(close + 2)};
-    }
-  } else if (const auto colon = authority.rfind(':');
-             colon != std::string_view::npos) {
-    proxy.host = std::string{authority.substr(0, colon)};
-    proxy.port = std::string{authority.substr(colon + 1)};
-  } else {
-    proxy.host = std::string{authority};
-  }
-  if (proxy.port.empty()) {
-    proxy.port = "80";
-  }
-  if (proxy.host.empty() || proxy.port.empty()) {
-    proxy.valid = false;
-    proxy.error = "proxy_host_or_port_missing";
-  }
-  return proxy;
-}
-
 namespace net_detail {
 
 ResolveResult resolve(
@@ -254,74 +91,6 @@ bool connect_endpoint(
     std::string& error) {
   const auto endpoints = tcp::resolver::results_type::create(endpoint, {}, {});
   return connect(context, stream, endpoints, deadline, error);
-}
-
-bool establish_proxy_tunnel(
-    asio::io_context& context,
-    beast::tcp_stream& stream,
-    const ProxyConfig& proxy,
-    std::string_view destination_host,
-    std::string_view destination_port,
-    std::chrono::steady_clock::time_point deadline,
-    std::string& error) {
-  namespace http = beast::http;
-  http::request<http::empty_body> request{
-      http::verb::connect,
-      std::string{destination_host} + ":" + std::string{destination_port},
-      11};
-  request.set(http::field::host, request.target());
-  request.set(http::field::user_agent, "exchange-api-probe/3");
-  request.set(http::field::proxy_connection, "keep-alive");
-  if (!proxy.authorization.empty()) {
-    request.set(http::field::proxy_authorization, proxy.authorization);
-  }
-
-  boost::system::error_code operation_error;
-  bool complete = false;
-  stream.expires_at(deadline);
-  http::async_write(
-      stream,
-      request,
-      [&](const boost::system::error_code& ec, std::size_t) {
-        operation_error = ec;
-        complete = true;
-      });
-  context.run();
-  context.restart();
-  if (!complete || operation_error) {
-    error = operation_error == beast::error::timeout
-                ? "proxy_connect_write_timeout"
-                : operation_error.message();
-    return false;
-  }
-
-  beast::flat_buffer buffer;
-  http::response_parser<http::empty_body> parser;
-  parser.header_limit(kMaxHttpHeadBytes);
-  complete = false;
-  stream.expires_at(deadline);
-  http::async_read_header(
-      stream,
-      buffer,
-      parser,
-      [&](const boost::system::error_code& ec, std::size_t) {
-        operation_error = ec;
-        complete = true;
-      });
-  context.run();
-  context.restart();
-  if (!complete || operation_error) {
-    error = operation_error == beast::error::timeout
-                ? "proxy_connect_read_timeout"
-                : operation_error.message();
-    return false;
-  }
-  if (parser.get().result() != http::status::ok) {
-    error = "proxy_connect_status_" +
-            std::to_string(parser.get().result_int());
-    return false;
-  }
-  return true;
 }
 
 bool configure_tls(

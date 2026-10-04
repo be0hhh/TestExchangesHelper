@@ -261,18 +261,6 @@ CliParseResult parse_cli(int argc, char** argv) {
         result.error = "--mode must be low, standard or high";
         return result;
       }
-    } else if (option == "--path") {
-      if (!option_value(argc, argv, index, option, value, result.error)) {
-        return result;
-      }
-      if (value == "direct") {
-        result.options.placement_path = PlacementPath::Direct;
-      } else if (value == "proxy") {
-        result.options.placement_path = PlacementPath::Proxy;
-      } else {
-        result.error = "--path must be direct or proxy";
-        return result;
-      }
     } else if (option == "--route") {
       if (!option_value(argc, argv, index, option, value, result.error)) {
         return result;
@@ -508,7 +496,7 @@ void print_help(std::ostream& output) {
       << "Probe/capture options:\n"
       << "      [--surface public|private] [--transport rest|ws|fix]\n"
       << "      [--duration-seconds N] [--confirm-load]\n"
-      << "      [--path direct|proxy] [--route natural|pinned|both]\n"
+      << "      [--route natural|pinned|both]\n"
       << "      [--output-dir PATH]\n"
       << "      [--max-artifact-bytes N] [--raw-public]\n"
       << "      [--confirm-private] [--confirm-session-lifecycle]\n"
@@ -521,8 +509,7 @@ void print_help(std::ostream& output) {
          "[--channel ID] [--rounds N] [--no-open] [--pcap]\n"
       << "          [--allow-adapter] [--allow-private-adapter]\n"
       << "\nPrivate REST is read-only and requires --confirm-private. Public\n"
-      << "commands never load credentials. HTTPS_PROXY/https_proxy and\n"
-      << "NO_PROXY/no_proxy are honored without silent direct fallback.\n";
+      << "commands never load credentials.\n";
 }
 
 std::vector<const ProductSpec*> select_products(

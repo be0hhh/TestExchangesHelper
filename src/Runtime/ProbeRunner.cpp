@@ -35,9 +35,6 @@ namespace {
   if (error.find("timeout") != std::string_view::npos) {
     return Outcome::Timeout;
   }
-  if (stage.find("proxy") != std::string_view::npos) {
-    return Outcome::ProxyError;
-  }
   if (stage.find("tls") != std::string_view::npos) {
     return Outcome::TlsError;
   }
@@ -196,8 +193,7 @@ namespace {
     const RestCase& probe_case,
     const RunLimits& limits,
     const std::optional<SignedRequest>& signed_request,
-    const std::optional<std::string>& pinned_ip,
-    const std::optional<bool>& use_proxy) {
+    const std::optional<std::string>& pinned_ip) {
   Observation last;
   const auto attempts = std::max(1U, limits.attempts);
   for (unsigned attempt = 1; attempt <= attempts; ++attempt) {
@@ -205,8 +201,7 @@ namespace {
         probe_case,
         std::chrono::steady_clock::now() + limits.timeout,
         signed_request,
-        pinned_ip,
-        use_proxy);
+        pinned_ip);
     last = classify_http(product, probe_case, result, limits);
     last.attempts_allowed = attempts;
     last.attempts_used = attempt;
@@ -245,10 +240,9 @@ Observation run_public_rest(
     const ProductSpec& product,
     const RestCase& probe_case,
     const RunLimits& limits,
-    const std::optional<std::string>& pinned_ip,
-    const std::optional<bool>& use_proxy) {
+    const std::optional<std::string>& pinned_ip) {
   return run_http_attempts(
-      product, probe_case, limits, std::nullopt, pinned_ip, use_proxy);
+      product, probe_case, limits, std::nullopt, pinned_ip);
 }
 
 Observation run_private_rest(
@@ -256,8 +250,7 @@ Observation run_private_rest(
     const RestCase& probe_case,
     const Credentials& credentials,
     const RunLimits& limits,
-    const std::optional<std::string>& pinned_ip,
-    const std::optional<bool>& use_proxy) {
+    const std::optional<std::string>& pinned_ip) {
   std::string sign_error;
   const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
                        std::chrono::system_clock::now().time_since_epoch())
@@ -271,23 +264,21 @@ Observation run_private_rest(
         "signing_failed:" + sign_error);
   }
   return run_http_attempts(
-      product, probe_case, limits, signed_request, pinned_ip, use_proxy);
+      product, probe_case, limits, signed_request, pinned_ip);
 }
 
 Observation run_public_ws(
     const ProductSpec& product,
     const WsCase& probe_case,
     const RunLimits& limits,
-    const std::optional<std::string>& pinned_ip,
-    const std::optional<bool>& use_proxy) {
+    const std::optional<std::string>& pinned_ip) {
   Observation last;
   const auto attempts = std::max(1U, limits.attempts);
   for (unsigned attempt = 1; attempt <= attempts; ++attempt) {
     const auto result = observe_ws(
         probe_case,
         std::chrono::steady_clock::now() + limits.timeout,
-        pinned_ip,
-        use_proxy);
+        pinned_ip);
     last = Observation{
         .kind = "observation",
         .venue = product.venue,

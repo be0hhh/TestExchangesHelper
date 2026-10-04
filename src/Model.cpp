@@ -123,7 +123,6 @@ std::string_view to_string(Outcome value) noexcept {
           std::string_view{"expected_rejection"}},
       std::pair{Outcome::TransportError, std::string_view{"transport_error"}},
       std::pair{Outcome::TlsError, std::string_view{"tls_error"}},
-      std::pair{Outcome::ProxyError, std::string_view{"proxy_error"}},
       std::pair{Outcome::HttpError, std::string_view{"http_error"}},
       std::pair{Outcome::LogicalError, std::string_view{"logical_error"}},
       std::pair{Outcome::SchemaError, std::string_view{"schema_error"}},
