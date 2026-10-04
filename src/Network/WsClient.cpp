@@ -194,11 +194,8 @@ WsResult observe_ws(
     std::chrono::steady_clock::time_point deadline,
     const std::optional<std::string>& pinned_ip,
     const std::optional<bool>& use_proxy) {
-  const auto start = std::chrono::steady_clock::now();
   WsResult result{};
   const auto finish = [&]() {
-    result.timings.total_us = net_detail::elapsed_us(start);
-    result.elapsed_ms = result.timings.total_us / 1000U;
     return std::move(result);
   };
   result.protocol_stage = "configuration";
@@ -209,7 +206,6 @@ WsResult observe_ws(
     tls_context.set_default_verify_paths(setup_error);
     if (setup_error) {
       result.error = "default_ca_paths_failed:" + setup_error.message();
-      result.elapsed_ms = net_detail::elapsed_ms(start);
       return finish();
     }
     tls_context.set_options(
@@ -224,25 +220,21 @@ WsResult observe_ws(
     if (use_proxy.value_or(false) && !proxy.enabled) {
       result.protocol_stage = "proxy_configuration";
       result.error = "proxy_not_configured";
-      result.elapsed_ms = net_detail::elapsed_ms(start);
       return finish();
     }
     if (proxy.enabled && !proxy.valid) {
       result.protocol_stage = "proxy_configuration";
       result.error = proxy.error;
-      result.elapsed_ms = net_detail::elapsed_ms(start);
       return finish();
     }
     if (proxy.enabled && pinned_ip.has_value()) {
       result.protocol_stage = "route_configuration";
       result.error = "pinned_route_unavailable_through_proxy";
-      result.elapsed_ms = net_detail::elapsed_ms(start);
       return finish();
     }
     const auto& connect_host = proxy.enabled ? proxy.host : probe_case.host;
     const auto& connect_port = proxy.enabled ? proxy.port : std::string{"443"};
     result.protocol_stage = "dns";
-    auto stage_start = std::chrono::steady_clock::now();
     net_detail::ResolveResult resolved;
     std::optional<asio::ip::tcp::endpoint> pinned_endpoint;
     if (pinned_ip.has_value()) {
@@ -250,7 +242,6 @@ WsResult observe_ws(
       const auto address = asio::ip::make_address(*pinned_ip, address_error);
       if (address_error) {
         result.error = "pinned_ip_invalid:" + address_error.message();
-        result.elapsed_ms = net_detail::elapsed_ms(start);
         return finish();
       }
       pinned_endpoint.emplace(address, 443U);
@@ -260,10 +251,8 @@ WsResult observe_ws(
           connect_host,
           connect_port,
           deadline);
-      result.timings.dns_us = net_detail::elapsed_us(stage_start);
       if (!resolved.ok) {
         result.error = resolved.error;
-        result.elapsed_ms = net_detail::elapsed_ms(start);
         return finish();
       }
     }
@@ -272,7 +261,6 @@ WsResult observe_ws(
     stream.read_message_max(kMaxWsMessageBytes);
     result.protocol_stage =
         proxy.enabled ? "proxy_tcp_connect" : "tcp_connect";
-    stage_start = std::chrono::steady_clock::now();
     const bool connected =
         pinned_endpoint.has_value()
             ? net_detail::connect_endpoint(
@@ -288,13 +276,10 @@ WsResult observe_ws(
                   deadline,
                   result.error);
     if (!connected) {
-      result.elapsed_ms = net_detail::elapsed_ms(start);
       return finish();
     }
-    result.timings.tcp_connect_us = net_detail::elapsed_us(stage_start);
     if (proxy.enabled) {
       result.protocol_stage = "proxy_connect";
-      stage_start = std::chrono::steady_clock::now();
       if (!net_detail::establish_proxy_tunnel(
               context,
               beast::get_lowest_layer(stream),
@@ -303,11 +288,9 @@ WsResult observe_ws(
               "443",
               deadline,
               result.error)) {
-        result.elapsed_ms = net_detail::elapsed_ms(start);
         close_socket(stream);
         return finish();
       }
-      result.timings.proxy_connect_us = net_detail::elapsed_us(stage_start);
     }
 
     result.protocol_stage = "tls_configuration";
@@ -315,22 +298,18 @@ WsResult observe_ws(
             stream.next_layer(),
             probe_case.host,
             result.error)) {
-      result.elapsed_ms = net_detail::elapsed_ms(start);
       close_socket(stream);
       return finish();
     }
     result.protocol_stage = "tls_handshake";
-    stage_start = std::chrono::steady_clock::now();
     if (!net_detail::tls_handshake(
             context,
             stream.next_layer(),
             deadline,
             result.error)) {
-      result.elapsed_ms = net_detail::elapsed_ms(start);
       close_socket(stream);
       return finish();
     }
-    result.timings.tls_handshake_us = net_detail::elapsed_us(stage_start);
     result.tls_verified = true;
     net_detail::refresh_transport_metadata(
         result.transport, stream.next_layer());
@@ -356,7 +335,6 @@ WsResult observe_ws(
     boost::system::error_code handshake_error;
     bool handshake_complete = false;
     result.protocol_stage = "ws_handshake";
-    stage_start = std::chrono::steady_clock::now();
     stream.async_handshake(
         probe_case.host,
         probe_case.path,
@@ -370,30 +348,24 @@ WsResult observe_ws(
       result.error = timed_out(handshake_error)
                          ? "ws_handshake_timeout"
                          : handshake_error.message();
-      result.elapsed_ms = net_detail::elapsed_ms(start);
       close_socket(stream);
       return finish();
     }
-    result.timings.ws_handshake_us = net_detail::elapsed_us(stage_start);
     result.connected = true;
 
     if (probe_case.read_welcome) {
       result.protocol_stage = "welcome";
-      stage_start = std::chrono::steady_clock::now();
       auto message = async_read_message(context, stream, deadline);
       if (!message.ok) {
         result.error = message.error;
-        result.elapsed_ms = net_detail::elapsed_ms(start);
         result.control_pings = control_pings;
         close_socket(stream);
         return finish();
       }
-      result.timings.welcome_us = net_detail::elapsed_us(stage_start);
       boost::json::value welcome;
       if (!json_message(message.payload, welcome) ||
           !valid_kucoin_welcome(welcome, message.binary)) {
         result.error = "welcome_contract_mismatch";
-        result.elapsed_ms = net_detail::elapsed_ms(start);
         result.control_pings = control_pings;
         close_socket(stream);
         return finish();
@@ -403,7 +375,6 @@ WsResult observe_ws(
     const auto subscribe = subscription_payload(probe_case);
     if (!subscribe.empty()) {
       result.protocol_stage = "subscribe_write";
-      stage_start = std::chrono::steady_clock::now();
       if (!async_write_message(
               context,
               stream,
@@ -411,16 +382,13 @@ WsResult observe_ws(
               probe_case.subscribe_binary,
               deadline,
               result.error)) {
-        result.elapsed_ms = net_detail::elapsed_ms(start);
         result.control_pings = control_pings;
         close_socket(stream);
         return finish();
       }
-      result.timings.subscribe_write_us = net_detail::elapsed_us(stage_start);
     }
 
     bool ack_complete = !probe_case.require_ack;
-    const auto application_start = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() < deadline) {
       result.protocol_stage = ack_complete ? "data_read" : "ack_read";
       auto message = async_read_message(context, stream, deadline);
@@ -476,27 +444,16 @@ WsResult observe_ws(
 
       if (!ack_complete && ack.matched) {
         ack_complete = true;
-        if (result.timings.ack_us == 0U) {
-          result.timings.ack_us = net_detail::elapsed_us(application_start);
-        }
         result.protocol_stage = "ack";
         if (probe_case.ack_implies_data && data.matched) {
           result.data_complete = true;
-          result.timings.first_data_us =
-              net_detail::elapsed_us(application_start);
         }
       } else if (!ack_complete && probe_case.data_implies_ack && data.matched) {
         ack_complete = true;
         result.data_complete = true;
-        result.timings.ack_us = net_detail::elapsed_us(application_start);
-        result.timings.first_data_us = result.timings.ack_us;
         result.protocol_stage = "data_implies_ack";
       } else if (ack_complete && data.matched) {
         result.data_complete = true;
-        if (result.timings.first_data_us == 0U) {
-          result.timings.first_data_us =
-              net_detail::elapsed_us(application_start);
-        }
         result.protocol_stage = "data";
       }
 
@@ -523,13 +480,10 @@ WsResult observe_ws(
     }
     net_detail::refresh_transport_metadata(
         result.transport, stream.next_layer());
-    result.timings.total_us = net_detail::elapsed_us(start);
-    result.elapsed_ms = result.timings.total_us / 1000U;
     close_socket(stream);
     return finish();
   } catch (const std::exception& error) {
     result.error = std::string{"exception:"} + error.what();
-    result.elapsed_ms = net_detail::elapsed_ms(start);
     return finish();
   }
 }

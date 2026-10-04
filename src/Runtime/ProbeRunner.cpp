@@ -102,18 +102,13 @@ namespace {
       .outcome = Outcome::NotRun,
       .tls_ok = result.tls_verified,
       .http_status = result.status,
-      .elapsed_ms = result.elapsed_ms,
       .payload_bytes = result.body_bytes,
-      .timings = result.timings,
       .transport_metadata = result.transport,
       .stage = result.stage,
       .error = result.error,
       .evidence = nullptr,
       .raw_public = std::nullopt,
   };
-  if (observation.timings.total_us == 0U && result.elapsed_ms != 0U) {
-    observation.timings.total_us = result.elapsed_ms * 1000U;
-  }
   observation.transport_ok = result.status != 0 && result.tls_verified;
   observation.http_ok = result.status >= 200 && result.status < 300;
   if (!result.json_present) {
@@ -309,11 +304,9 @@ Observation run_public_ws(
         .tls_ok = result.tls_verified,
         .logical_ok = result.ack_complete || !probe_case.require_ack,
         .schema_ok = result.data_complete || !probe_case.require_data,
-        .elapsed_ms = result.elapsed_ms,
         .payload_bytes = result.payload_bytes,
         .attempts_allowed = attempts,
         .attempts_used = attempt,
-        .timings = result.timings,
         .transport_metadata = result.transport,
         .stage = result.protocol_stage,
         .error = result.error,
@@ -332,9 +325,6 @@ Observation run_public_ws(
     last.expectation_met =
         last.transport_ok && last.tls_ok &&
         last.logical_ok && last.schema_ok && last.error.empty();
-    if (last.timings.total_us == 0U && result.elapsed_ms != 0U) {
-      last.timings.total_us = result.elapsed_ms * 1000U;
-    }
     if (last.expectation_met) {
       last.outcome = Outcome::Success;
     } else if (result.protocol_stage == "decompression") {

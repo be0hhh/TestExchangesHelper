@@ -32,23 +32,33 @@ From this directory in the canonical CXET checkout:
 ./compile.sh all portable p
 ```
 
-The default incrementally builds this repository's production targets and their
-full required dependency closure, including missing or stale foreign providers.
-Ready targets are reused. `all` builds and runs only this repository's registered
-tests and their required production dependencies; it does not select unrelated
-production daemons, benchmarks or another repository's tests. If no
-local tests are registered, the command reports that and succeeds.
+The default builds this owner's product incrementally with pinned Clang, GNU
+Make, Release `-O3`, native CPU targeting and LTO OFF. `portable` disables CPU
+targeting. Fresh foreign providers are reused silently; missing or stale foreign
+modules are listed in one combined prompt before rebuilding them. Decline or EOF
+cancels; a noninteractive invocation with stale providers exits with an explanatory
+error. `--force` builds the selected product and necessary closure incrementally
+with FULL LTO, without cleaning or prompting; ThinLTO is never selected.
 
-Libraries are static `.a` archives. Release uses `-O3`, host-native CPU targeting
-and full LTO; `portable` selects portable CPU targeting. Use `p` or `-j N` for
-parallelism and `--help` for the supported options.
+`all` builds and runs only this owner's registered tests and needed dependencies.
+`--force all` first builds the optimized product, then local tests. Unrelated
+products, benchmarks and other owners' tests are not selected. An empty test
+registry is reported explicitly and does not establish passing test proof.
+
+Optimized trees use `build` (native) or `build/modes/portable`; development trees
+use `build/modes/dev-native` or `build/modes/dev-portable`. `CXET_BUILD_DIR` is the
+exact caller-supplied path; an incompatible existing profile is rejected. Only a
+successful product build updates `build/.compile-active/<owner>.json`; default
+launchers resolve that selected tree. Failed, UI-only and test-only runs do not
+switch it. Project-owned libraries remain static `.a`; `p` selects available
+processors and `-j N` overrides it. See `--help` for supported options.
 
 Old local test and benchmark targets have been retired from the source graph.
 
 ## Continuous integration
 
-The retired offline test and feed comparison targets are absent from the
-current source graph. CI, compiler and runtime results are separate evidence;
+Retired feed-comparison targets are absent. The current owner offline suite
+checks protocol contracts and the cleanup regressions without network probes. CI, compiler and runtime results are separate evidence;
 this source migration does not establish a passing CI revision.
 
 ## Profiles
@@ -154,24 +164,23 @@ Packet capture is public-only, opt-in, bounded, and may require OS capabilities.
 TLS key logging is never enabled implicitly. See `doc/ADAPTER_PROTOCOL.md` for
 the adapter JSONL contract.
 
-## Existing diagnostics
+## Capability and reachability checks
 
-The prior commands remain available:
+`matrix` lists declared capabilities; `sandbox` validates bounded protocol
+observations. `placement` reports endpoint/DNS/IP discovery and one bounded
+TCP/TLS reachability attempt per selected natural or pinned route. Proxy routes
+retain their real attribution; a proxy cannot apply a pinned destination IP.
+Results contain status, stage/error and connection identity, without timing
+series, ping, throughput, histograms or speed rankings.
 
-```text
-matrix
-latency
-stability
-placement
-compare
-sandbox
-```
-
-They use bounded attempts, timeouts and artifact limits. `latency` reports the
-measured client boundary only; it must not be presented as matching-engine or
-order-path latency.
+`latency`, `stability`, `compare` and the old `run` alias are removed.
+`--lanes`, `--samples` and `--connection` are rejected. `--mode` selects only
+the existing discovery budget; `--duration-seconds` bounds research capture.
+Observation JSON uses `schema_version=4`; relation/findings outputs use their
+current `v2` schema identifiers. Raw receive/exchange timestamps, normalized
+identity, sequence/book validity and bounded-corpus completeness remain.
 
 ## Bundle compatibility
 
-Research and profiler bundles use `exchange.api_probe.bundle.v3`. Older bundle
-formats are deliberately not migrated or silently read by compare.
+Research capture bundles use `exchange.api_probe.bundle.v3`. Older bundle
+formats are deliberately not migrated or silently interpreted as current bundles.

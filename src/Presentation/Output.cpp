@@ -29,26 +29,6 @@ void emit_json_line(
   output << boost::json::serialize(value) << '\n';
 }
 
-[[nodiscard]] boost::json::object stage_timings_json(
-    const StageTimings& timings) {
-  return {
-      {"dns_us", timings.dns_us},
-      {"tcp_connect_us", timings.tcp_connect_us},
-      {"proxy_connect_us", timings.proxy_connect_us},
-      {"tls_handshake_us", timings.tls_handshake_us},
-      {"request_write_us", timings.request_write_us},
-      {"ttfb_us", timings.ttfb_us},
-      {"body_read_us", timings.body_read_us},
-      {"json_parse_us", timings.json_parse_us},
-      {"ws_handshake_us", timings.ws_handshake_us},
-      {"welcome_us", timings.welcome_us},
-      {"subscribe_write_us", timings.subscribe_write_us},
-      {"ack_us", timings.ack_us},
-      {"first_data_us", timings.first_data_us},
-      {"total_us", timings.total_us},
-  };
-}
-
 [[nodiscard]] boost::json::object transport_metadata_json(
     const TransportMetadata& metadata) {
   return {
@@ -59,12 +39,6 @@ void emit_json_line(
       {"alpn", metadata.alpn},
       {"certificate_not_after", metadata.certificate_not_after},
       {"tls_session_reused", metadata.tls_session_reused},
-      {"tcp_info_available", metadata.tcp_info_available},
-      {"tcp_rtt_us", metadata.tcp_rtt_us},
-      {"tcp_rtt_variance_us", metadata.tcp_rtt_variance_us},
-      {"tcp_retransmits", metadata.tcp_retransmits},
-      {"tcp_congestion_window", metadata.tcp_congestion_window},
-      {"tcp_mss", metadata.tcp_mss},
   };
 }
 
@@ -91,7 +65,7 @@ boost::json::object capability_json(
 
 boost::json::object observation_json(const Observation& observation) {
   boost::json::object result{
-      {"schema_version", 3},
+      {"schema_version", 4},
       {"kind", observation.kind},
       {"venue", observation.venue},
       {"product", observation.product},
@@ -110,11 +84,9 @@ boost::json::object observation_json(const Observation& observation) {
       {"logical_ok", observation.logical_ok},
       {"schema_ok", observation.schema_ok},
       {"http_status", observation.http_status},
-      {"elapsed_ms", observation.elapsed_ms},
       {"payload_bytes", observation.payload_bytes},
       {"attempts_allowed", observation.attempts_allowed},
       {"attempts_used", observation.attempts_used},
-      {"stage_timings", stage_timings_json(observation.timings)},
       {"transport_metadata",
        transport_metadata_json(observation.transport_metadata)},
       {"stage", observation.stage},
@@ -145,7 +117,6 @@ void emit_observations(
          << std::setw(9) << "SURFACE"
          << std::setw(8) << "WIRE"
          << std::setw(22) << "OUTCOME"
-         << std::setw(9) << "TIME_MS"
          << "DETAIL\n";
   for (const auto& observation : observations) {
     output << std::left
@@ -155,7 +126,6 @@ void emit_observations(
            << std::setw(9) << to_string(observation.surface)
            << std::setw(8) << to_string(observation.wire)
            << std::setw(22) << to_string(observation.outcome)
-           << std::setw(9) << observation.elapsed_ms
            << (observation.error.empty() ? observation.stage
                                          : observation.error)
            << '\n';

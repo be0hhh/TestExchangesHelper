@@ -16,9 +16,9 @@ inline constexpr std::string_view kResearchFrameSchema =
 inline constexpr std::string_view kResearchEventSchema =
     "exchange.api_probe.event.v1";
 inline constexpr std::string_view kResearchRelationSchema =
-    "exchange.api_probe.relation.v1";
+    "exchange.api_probe.relation.v2";
 inline constexpr std::string_view kResearchFindingsSchema =
-    "exchange.api_probe.findings.v1";
+    "exchange.api_probe.findings.v2";
 
 [[nodiscard]] int capture_research_bundle(
     const CliOptions& options,

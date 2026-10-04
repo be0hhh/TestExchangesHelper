@@ -15,9 +15,6 @@ namespace exchange_probe {
 enum class Command {
   Help,
   Matrix,
-  Latency,
-  Stability,
-  Compare,
   Sandbox,
   Placement,
   Profile,
@@ -26,7 +23,7 @@ enum class Command {
   Serve,
 };
 
-enum class PlacementMode {
+enum class DiscoveryMode {
   Low,
   Standard,
   High,
@@ -43,12 +40,6 @@ enum class RouteMode {
   Both,
 };
 
-enum class ConnectionMode {
-  Cold,
-  Warm,
-  Both,
-};
-
 struct CliOptions {
   Command command{Command::Help};
   std::vector<std::string> venues;
@@ -59,12 +50,9 @@ struct CliOptions {
   std::optional<std::filesystem::path> sandbox_file;
   std::optional<std::filesystem::path> env_file;
   RunLimits limits;
-  PlacementMode placement_mode{PlacementMode::Standard};
+  DiscoveryMode discovery_mode{DiscoveryMode::Standard};
   PlacementPath placement_path{PlacementPath::Direct};
   RouteMode route_mode{RouteMode::Natural};
-  ConnectionMode connection_mode{ConnectionMode::Cold};
-  std::optional<unsigned> lanes;
-  std::optional<unsigned> samples;
   std::optional<unsigned> duration_seconds;
   std::uint64_t max_artifact_bytes{kDefaultArtifactBytes};
   std::optional<std::filesystem::path> output_dir;
@@ -147,21 +135,6 @@ void emit_matrix(
     std::ostream& error_output);
 
 [[nodiscard]] int run_placement(
-    const CliOptions& options,
-    std::ostream& output,
-    std::ostream& error_output);
-
-[[nodiscard]] int run_latency(
-    const CliOptions& options,
-    std::ostream& output,
-    std::ostream& error_output);
-
-[[nodiscard]] int run_stability(
-    const CliOptions& options,
-    std::ostream& output,
-    std::ostream& error_output);
-
-[[nodiscard]] int run_compare(
     const CliOptions& options,
     std::ostream& output,
     std::ostream& error_output);

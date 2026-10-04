@@ -235,8 +235,6 @@ class ResearchBundleWriter {
       row["tls_version"] = transport->tls_version;
       row["tls_cipher"] = transport->tls_cipher;
       row["alpn"] = transport->alpn;
-      row["tcp_rtt_us"] = transport->tcp_rtt_us;
-      row["tcp_retransmits"] = transport->tcp_retransmits;
     }
     const auto line = boost::json::serialize(row) + "\n";
     std::scoped_lock lock{mutex_};

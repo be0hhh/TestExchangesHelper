@@ -70,12 +70,6 @@ struct ResolveResult {
 
 void close_tls(TlsStream& stream) noexcept;
 
-[[nodiscard]] std::uint64_t elapsed_ms(
-    std::chrono::steady_clock::time_point start) noexcept;
-
-[[nodiscard]] std::uint64_t elapsed_us(
-    std::chrono::steady_clock::time_point start) noexcept;
-
 [[nodiscard]] TransportMetadata transport_metadata(
     TlsStream& stream) noexcept;
 

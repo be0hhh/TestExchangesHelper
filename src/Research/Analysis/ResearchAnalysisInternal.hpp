@@ -146,15 +146,9 @@ struct BookState {
   std::string last_native_id;
   std::string last_bid;
   std::string last_ask;
-  std::optional<std::uint64_t> first_event_ns;
-  std::optional<std::uint64_t> reconstruction_ns;
-  std::optional<std::uint64_t> full_reconstruction_ns;
 };
 
 void enforce_normalized_capacity(NormalizedEvent& event);
-
-[[nodiscard]] boost::json::object distribution_json(
-    std::vector<std::uint64_t> values);
 
 [[nodiscard]] bool native_id_less(
     std::string_view lhs,
@@ -230,7 +224,6 @@ void apply_levels(
     std::ofstream& output,
     std::uint64_t& relation_id,
     bool& output_full,
-    std::map<std::string, std::vector<std::uint64_t>>& lag_distributions,
     std::string_view mode,
     std::string_view evidence,
     const NormalizedEvent& source,

@@ -20,7 +20,6 @@
 #include <set>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -47,16 +46,9 @@ struct Endpoint {
   std::vector<Reference> references;
 };
 
-struct Budget {
-  unsigned dns_rounds{30};
-  unsigned attempts{3};
-};
-
-struct Sample {
+struct Reachability {
   bool tcp_ok{false};
   bool tls_ok{false};
-  std::uint64_t tcp_ms{0};
-  std::uint64_t tls_ms{0};
   TransportMetadata transport;
   std::string connected_ip;
   std::string ip_family;
@@ -73,30 +65,12 @@ using GeoCache = std::map<std::string, boost::json::value>;
              options.cases.end();
 }
 
-[[nodiscard]] Budget budget_for(PlacementMode mode) noexcept {
-  switch (mode) {
-    case PlacementMode::Low: return {5u, 1u};
-    case PlacementMode::Standard: return {30u, 3u};
-    case PlacementMode::High: return {300u, 10u};
-  }
-  return {};
-}
-
-[[nodiscard]] std::string_view mode_name(PlacementMode mode) noexcept {
-  switch (mode) {
-    case PlacementMode::Low: return "low";
-    case PlacementMode::Standard: return "standard";
-    case PlacementMode::High: return "high";
-  }
-  return "unknown";
-}
-
 [[nodiscard]] std::string_view path_name(PlacementPath path) noexcept {
   return path == PlacementPath::Direct ? "direct" : "proxy";
 }
 
 void emit(std::ostream& output, boost::json::object value) {
-  value["schema_version"] = 1;
+  value["schema_version"] = 2;
   output << boost::json::serialize(value) << '\n';
 }
 
@@ -110,12 +84,6 @@ void emit(std::ostream& output, boost::json::object value) {
       {"alpn", metadata.alpn},
       {"certificate_not_after", metadata.certificate_not_after},
       {"tls_session_reused", metadata.tls_session_reused},
-      {"tcp_info_available", metadata.tcp_info_available},
-      {"tcp_rtt_us", metadata.tcp_rtt_us},
-      {"tcp_rtt_variance_us", metadata.tcp_rtt_variance_us},
-      {"tcp_retransmits", metadata.tcp_retransmits},
-      {"tcp_congestion_window", metadata.tcp_congestion_window},
-      {"tcp_mss", metadata.tcp_mss},
   };
 }
 
@@ -195,13 +163,13 @@ void emit(std::ostream& output, boost::json::object value) {
   return references;
 }
 
-[[nodiscard]] Sample transport_sample(
+[[nodiscard]] Reachability transport_reachability(
     const Endpoint& endpoint,
     const std::optional<asio::ip::tcp::endpoint>& target,
     PlacementPath path,
     std::chrono::milliseconds timeout) {
   const auto start = std::chrono::steady_clock::now();
-  Sample result;
+  Reachability result;
   try {
     asio::io_context context;
     ssl::context tls_context{ssl::context::tls_client};
@@ -267,7 +235,6 @@ void emit(std::ostream& output, boost::json::object value) {
       result.ip_family = connected.address().is_v6() ? "ipv6" : "ipv4";
     }
     result.tcp_ok = true;
-    result.tcp_ms = net_detail::elapsed_ms(start);
     result.stage = "tls_configuration";
     if (!net_detail::configure_tls(stream, endpoint.host, result.error)) {
       net_detail::close_tls(stream);
@@ -279,7 +246,6 @@ void emit(std::ostream& output, boost::json::object value) {
       return result;
     }
     result.tls_ok = true;
-    result.tls_ms = net_detail::elapsed_ms(start) - result.tcp_ms;
     result.transport = net_detail::transport_metadata(stream);
     result.stage = "complete";
     net_detail::close_tls(stream);
@@ -306,22 +272,6 @@ void emit(std::ostream& output, boost::json::object value) {
   }
   (void)::pclose(pipe);
   return result;
-}
-
-[[nodiscard]] std::optional<double> ping_ms(std::string_view ip) {
-  if (!shell_safe_ip(ip)) return std::nullopt;
-  const auto output = command_output(
-      std::string{"/usr/bin/ping "} + (ip.find(':') == std::string_view::npos ? "" : "-6 ") +
-      "-n -q -c 1 -W 1 " + std::string{ip} + " 2>/dev/null");
-  const auto equals = output.find('=');
-  const auto first_slash = equals == std::string::npos ? std::string::npos : output.find('/', equals);
-  const auto second_slash = first_slash == std::string::npos ? std::string::npos : output.find('/', first_slash + 1);
-  if (first_slash == std::string::npos || second_slash == std::string::npos) return std::nullopt;
-  try {
-    return std::stod(output.substr(first_slash + 1, second_slash - first_slash - 1));
-  } catch (...) {
-    return std::nullopt;
-  }
 }
 
 [[nodiscard]] std::optional<boost::json::value> geo_lookup(
@@ -426,10 +376,8 @@ int run_placement(const CliOptions& options,
     error_output << "configuration_error: filters selected no placement endpoints\n";
     return 2;
   }
-  const auto budget = budget_for(options.placement_mode);
-  emit(output, {{"kind", "placement_run"}, {"mode", mode_name(options.placement_mode)},
-                {"path", path_name(options.placement_path)}, {"dns_rounds", budget.dns_rounds},
-                {"transport_attempts", budget.attempts},
+  emit(output, {{"kind", "placement_run"},
+                {"path", path_name(options.placement_path)},
                 {"surface", to_string(options.surface.value_or(Surface::Public))}});
 
   const auto& providers = options.geo_providers;
@@ -442,143 +390,61 @@ int run_placement(const CliOptions& options,
                   {"auth_required", endpoint.auth_required},
                   {"references", endpoint_references(endpoint)}});
     std::map<std::string, asio::ip::tcp::endpoint> ips;
-    for (unsigned round = 1; round <= budget.dns_rounds; ++round) {
-      asio::io_context context;
-      const auto resolved = net_detail::resolve(
-          context, endpoint.host, std::to_string(endpoint.port),
-          std::chrono::steady_clock::now() + options.limits.timeout);
-      if (!resolved.ok) {
-        emit(output, {{"kind", "placement_dns"}, {"host", endpoint.host},
-                      {"port", endpoint.port}, {"round", round}, {"error", resolved.error}});
-        continue;
-      }
+    asio::io_context context;
+    const auto resolved = net_detail::resolve(
+        context, endpoint.host, std::to_string(endpoint.port),
+        std::chrono::steady_clock::now() + options.limits.timeout);
+    if (!resolved.ok) {
+      emit(output, {{"kind", "placement_dns"}, {"host", endpoint.host},
+                    {"port", endpoint.port}, {"error", resolved.error}});
+    } else {
       for (const auto& item : resolved.endpoints) {
         const auto target = item.endpoint();
         const auto ip = target.address().to_string();
         ips.emplace(ip, target);
         emit(output, {{"kind", "placement_dns"}, {"host", endpoint.host},
-                      {"port", endpoint.port}, {"round", round}, {"ip", ip}});
-      }
-      if (options.placement_mode == PlacementMode::High && round < budget.dns_rounds) {
-        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+                      {"port", endpoint.port}, {"ip", ip}});
       }
     }
-    if (options.route_mode != RouteMode::Pinned) {
-      std::uint64_t best_tcp_ms{0};
-      std::uint64_t best_tls_ms{0};
-      std::string connected_ip;
-      std::string ip_family;
-      for (unsigned attempt = 1; attempt <= budget.attempts; ++attempt) {
-        const auto sample = transport_sample(
-            endpoint, std::nullopt, options.placement_path,
-            options.limits.timeout);
-        if (sample.tcp_ok &&
-            (best_tcp_ms == 0U || sample.tcp_ms < best_tcp_ms)) {
-          best_tcp_ms = sample.tcp_ms;
-        }
-        if (sample.tls_ok &&
-            (best_tls_ms == 0U || sample.tls_ms < best_tls_ms)) {
-          best_tls_ms = sample.tls_ms;
-        }
-        connected_ip = sample.connected_ip;
-        ip_family = sample.ip_family;
-        emit(output, {{"kind", "placement_measurement"},
-                      {"venue", endpoint.venue},
-                      {"product", endpoint.product},
-                      {"host", endpoint.host},
-                      {"port", endpoint.port},
-                      {"connected_ip", sample.connected_ip},
-                      {"ip_family", sample.ip_family},
-                      {"attempt", attempt},
-                      {"path", path_name(options.placement_path)},
-                      {"route", "natural"},
-                      {"target_ip_applied", false},
-                      {"icmp_avg_ms", nullptr},
-                      {"tcp_ok", sample.tcp_ok},
-                      {"tls_ok", sample.tls_ok},
-                      {"tcp_ms", sample.tcp_ms},
-                      {"tls_ms", sample.tls_ms},
-                      {"transport_metadata",
-                       transport_metadata_json(sample.transport)},
-                      {"stage", sample.stage},
-                      {"error", sample.error},
-                      {"protocol_status",
-                       endpoint.auth_required
-                           ? "transport_only_auth_required"
-                           : "transport_only"}});
-      }
-      emit(output, {{"kind", "placement_summary"},
-                    {"venue", endpoint.venue},
-                    {"product", endpoint.product},
-                    {"host", endpoint.host},
-                    {"port", endpoint.port},
-                    {"connected_ip", connected_ip},
-                    {"ip_family", ip_family},
+    const auto emit_reachability = [&](const Reachability& result,
+                                      std::string_view route,
+                                      std::string_view targetIp,
+                                      std::string_view targetFamily) {
+      const bool pinned = !targetIp.empty();
+      const std::string_view family = pinned
+          ? targetFamily : std::string_view{result.ip_family};
+      boost::json::object row{{"kind", "placement_reachability"},
+                    {"venue", endpoint.venue}, {"product", endpoint.product},
+                    {"host", endpoint.host}, {"port", endpoint.port},
+                    {"connected_ip", result.connected_ip},
+                    {"ip_family", family},
                     {"path", path_name(options.placement_path)},
-                    {"route", "natural"},
-                    {"target_ip_applied", false},
-                    {"best_icmp_ms", nullptr},
-                    {"best_tcp_ms", best_tcp_ms},
-                    {"best_tls_ms", best_tls_ms}});
+                    {"route", route}, {"target_ip_applied", pinned},
+                    {"tcp_ok", result.tcp_ok}, {"tls_ok", result.tls_ok},
+                    {"transport_metadata", transport_metadata_json(result.transport)},
+                    {"stage", result.stage}, {"error", result.error},
+                    {"protocol_status", endpoint.auth_required
+                        ? "transport_only_auth_required" : "transport_only"}};
+      if (pinned) row["ip"] = targetIp;
+      emit(output, std::move(row));
+    };
+    if (options.route_mode != RouteMode::Pinned) {
+      emit_reachability(transport_reachability(endpoint, std::nullopt,
+          options.placement_path, options.limits.timeout), "natural", {}, {});
     }
-    if (options.route_mode == RouteMode::Natural) {
-      continue;
-    }
+    if (options.route_mode == RouteMode::Natural) continue;
     if (options.placement_path == PlacementPath::Proxy) {
       emit(output, {{"kind", "placement_route_unavailable"},
-                    {"venue", endpoint.venue},
-                    {"product", endpoint.product},
-                    {"host", endpoint.host},
-                    {"port", endpoint.port},
-                    {"route", "pinned"},
-                    {"path", "proxy"},
+                    {"venue", endpoint.venue}, {"product", endpoint.product},
+                    {"host", endpoint.host}, {"port", endpoint.port},
+                    {"route", "pinned"}, {"path", "proxy"},
                     {"reason", "proxy_resolves_destination_host"}});
       continue;
     }
     for (const auto& [ip, target] : ips) {
-      std::uint64_t best_tcp_ms{0};
-      std::uint64_t best_tls_ms{0};
-      std::optional<double> best_ping;
-      for (unsigned attempt = 1; attempt <= budget.attempts; ++attempt) {
-        const auto sample = transport_sample(
-            endpoint, target, options.placement_path, options.limits.timeout);
-        const auto ping = ping_ms(ip);
-        if (sample.tcp_ok && (best_tcp_ms == 0 || sample.tcp_ms < best_tcp_ms)) {
-          best_tcp_ms = sample.tcp_ms;
-        }
-        if (sample.tls_ok && (best_tls_ms == 0 || sample.tls_ms < best_tls_ms)) {
-          best_tls_ms = sample.tls_ms;
-        }
-        if (ping.has_value() && (!best_ping.has_value() || *ping < *best_ping)) {
-          best_ping = ping;
-        }
-        emit(output, {{"kind", "placement_measurement"}, {"venue", endpoint.venue},
-                      {"product", endpoint.product},
-                      {"host", endpoint.host}, {"port", endpoint.port}, {"ip", ip},
-                      {"ip_family", target.address().is_v6() ? "ipv6" : "ipv4"},
-                      {"attempt", attempt}, {"path", path_name(options.placement_path)},
-                      {"route", "pinned"},
-                      {"target_ip_applied", options.placement_path == PlacementPath::Direct},
-                      {"icmp_avg_ms", ping.has_value() ? boost::json::value(*ping) : boost::json::value{}},
-                      {"tcp_ok", sample.tcp_ok}, {"tls_ok", sample.tls_ok},
-                      {"tcp_ms", sample.tcp_ms}, {"tls_ms", sample.tls_ms},
-                      {"transport_metadata",
-                       transport_metadata_json(sample.transport)},
-                      {"stage", sample.stage}, {"error", sample.error},
-                      {"protocol_status", endpoint.auth_required ? "transport_only_auth_required" : "transport_only"}});
-        if (options.placement_mode == PlacementMode::High && attempt < budget.attempts) {
-          std::this_thread::sleep_for(std::chrono::milliseconds{100});
-        }
-      }
-      emit(output, {{"kind", "placement_summary"}, {"venue", endpoint.venue},
-                    {"product", endpoint.product},
-                    {"host", endpoint.host}, {"port", endpoint.port}, {"ip", ip},
-                    {"ip_family", target.address().is_v6() ? "ipv6" : "ipv4"},
-                    {"path", path_name(options.placement_path)},
-                    {"route", "pinned"},
-                    {"target_ip_applied", options.placement_path == PlacementPath::Direct},
-                    {"best_icmp_ms", best_ping.has_value() ? boost::json::value(*best_ping) : boost::json::value{}},
-                    {"best_tcp_ms", best_tcp_ms}, {"best_tls_ms", best_tls_ms}});
+      emit_reachability(transport_reachability(endpoint, target,
+          options.placement_path, options.limits.timeout), "pinned", ip,
+          target.address().is_v6() ? "ipv6" : "ipv4");
       if (geolocated.insert(ip).second) {
         for (const auto& provider : providers) {
           const auto key = geo_cache_key(provider, ip);

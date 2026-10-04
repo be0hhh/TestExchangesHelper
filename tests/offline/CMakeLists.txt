@@ -1,0 +1,2 @@
+cxet_add_offline_suite(exchange_probe_offline_cases OWNER TestExchangesHelper EXPECTED 10
+  SOURCES ProbeCases.cpp LIBRARIES exchange_probe_lib LABELS contracts)

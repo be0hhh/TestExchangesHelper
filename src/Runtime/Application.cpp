@@ -71,15 +71,6 @@ int run_application(
   }
 
   auto profiles = make_profiles();
-  if (options.command == Command::Latency) {
-    return run_latency(options, output, error_output);
-  }
-  if (options.command == Command::Stability) {
-    return run_stability(options, output, error_output);
-  }
-  if (options.command == Command::Compare) {
-    return run_compare(options, output, error_output);
-  }
   if (options.command == Command::Placement) {
     return run_placement(options, output, error_output);
   }

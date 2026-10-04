@@ -106,13 +106,8 @@ int analyze_research_bundle(
   std::uint64_t book_capacity_exceeded = 0U;
   std::uint64_t valid_bbo_transitions = 0U;
   std::uint64_t next_event_id = 0U;
-  std::map<std::string, std::uint64_t> previous_arrival;
   std::map<std::string, std::uint64_t> validity_counts;
-  std::map<std::string, std::vector<std::uint64_t>> arrival_intervals;
-  std::map<std::string, std::vector<std::uint64_t>>
-      first_usable_bbo_durations;
-  std::map<std::string, std::vector<std::uint64_t>>
-      full_reconstruction_durations;
+  bool full_reconstruction_observed = false;
   for (const auto& frame : frames_index) {
     const auto definition = definitions.find(frame.channel);
     if (definition == definitions.end()) continue;
@@ -166,13 +161,6 @@ int analyze_research_bundle(
       event.semantic_hash = semantic_event_hash(event);
     }
     enforce_normalized_capacity(event);
-    const auto previous = previous_arrival.find(event.channel);
-    if (previous != previous_arrival.end() &&
-        event.monotonic_ns >= previous->second) {
-      arrival_intervals[event.channel].push_back(
-          event.monotonic_ns - previous->second);
-    }
-    previous_arrival[event.channel] = event.monotonic_ns;
     if (!event.native_id.empty()) {
       const auto key =
           event.channel + ":" + std::to_string(event.round) + ":" +
@@ -215,9 +203,6 @@ int analyze_research_bundle(
               : json_path(value, definition->second.mapping.data_path);
       if (data == nullptr) data = &value;
       auto& state = books[{event.round, event.channel}];
-      if (!state.first_event_ns.has_value()) {
-        state.first_event_ns = event.monotonic_ns;
-      }
       if (event.snapshot) {
         state.bids.clear();
         state.asks.clear();
@@ -276,21 +261,7 @@ int analyze_research_bundle(
         state.last_bid = bid;
         state.last_ask = ask;
       }
-      if (valid && !state.reconstruction_ns.has_value() &&
-          state.first_event_ns.has_value()) {
-        state.reconstruction_ns =
-            event.monotonic_ns - *state.first_event_ns;
-        first_usable_bbo_durations[event.channel].push_back(
-            *state.reconstruction_ns);
-      }
-      if (valid && state.complete &&
-          !state.full_reconstruction_ns.has_value() &&
-          state.first_event_ns.has_value()) {
-        state.full_reconstruction_ns =
-            event.monotonic_ns - *state.first_event_ns;
-        full_reconstruction_durations[event.channel].push_back(
-            *state.full_reconstruction_ns);
-      }
+      full_reconstruction_observed |= valid && state.complete;
       state.valid = valid;
     }
     ++validity_counts[event.validity];
@@ -314,7 +285,6 @@ int analyze_research_bundle(
 
   std::uint64_t relation_id = 0U;
   bool relation_output_full = false;
-  std::map<std::string, std::vector<std::uint64_t>> relation_lags;
   std::unordered_map<std::string, std::size_t> identity_index;
   std::unordered_map<std::string, std::size_t> exchange_time_index;
   std::unordered_map<std::string, std::size_t> transaction_time_index;
@@ -332,7 +302,6 @@ int analyze_research_bundle(
           events[previous->second].channel != target.channel) {
         if (!emit_relation(
                 relations_file, relation_id, relation_output_full,
-                relation_lags,
                 "identity", "observed",
                 events[previous->second], target,
                 "same_native_id_cross_channel_unverified_scope")) {
@@ -350,7 +319,6 @@ int analyze_research_bundle(
           events[previous->second].channel != target.channel) {
         if (!emit_relation(
                 relations_file, relation_id, relation_output_full,
-                relation_lags,
                 "exchange_time_cohort",
                 "consistent", events[previous->second], target,
                 "same_exchange_event_time")) {
@@ -368,7 +336,6 @@ int analyze_research_bundle(
           events[previous->second].channel != target.channel) {
         if (!emit_relation(
                 relations_file, relation_id, relation_output_full,
-                relation_lags,
                 "exchange_time_cohort",
                 "consistent", events[previous->second], target,
                 "same_exchange_transaction_time")) {
@@ -390,7 +357,6 @@ int analyze_research_bundle(
           events[previous->second].channel != target.channel) {
         if (!emit_relation(
                 relations_file, relation_id, relation_output_full,
-                relation_lags,
                 "state_convergence",
                 "consistent", events[previous->second], target,
                 "same_resulting_bbo")) {
@@ -435,7 +401,6 @@ int analyze_research_bundle(
       if (book_trade_pair && price_touches_or_crosses) {
         if (!emit_relation(
                 relations_file, relation_id, relation_output_full,
-                relation_lags,
                 "market_effect", "heuristic",
                 source, target,
                 "trade_touches_or_crosses_bbo_within_receive_window")) {
@@ -455,28 +420,9 @@ int analyze_research_bundle(
     error_output << "analysis_error: artifact_write_failed\n";
     return 2;
   }
-  boost::json::object arrival_distributions;
-  for (auto& [channel, values] : arrival_intervals) {
-    arrival_distributions[channel] = distribution_json(std::move(values));
-  }
   boost::json::object validity_summary;
   for (const auto& [validity, count] : validity_counts) {
     validity_summary[validity] = count;
-  }
-  boost::json::object usable_bbo_distributions;
-  for (auto& [channel, values] : first_usable_bbo_durations) {
-    usable_bbo_distributions[channel] =
-        distribution_json(std::move(values));
-  }
-  boost::json::object full_reconstruction_distributions;
-  for (auto& [channel, values] : full_reconstruction_durations) {
-    full_reconstruction_distributions[channel] =
-        distribution_json(std::move(values));
-  }
-  boost::json::object relation_lag_distributions;
-  for (auto& [relation, values] : relation_lags) {
-    relation_lag_distributions[relation] =
-        distribution_json(std::move(values));
   }
   boost::json::object findings{
       {"schema", kResearchFindingsSchema},
@@ -489,19 +435,12 @@ int analyze_research_bundle(
       {"relation_candidates_dropped", relation_candidates_dropped},
       {"valid_bbo_transitions", valid_bbo_transitions},
       {"event_validity", std::move(validity_summary)},
-      {"arrival_intervals_by_channel", std::move(arrival_distributions)},
-      {"absolute_receive_lag_by_relation",
-       std::move(relation_lag_distributions)},
-      {"first_usable_bbo_by_channel",
-       std::move(usable_bbo_distributions)},
       {"full_bbo_reconstruction",
        boost::json::object{
            {"status",
-            full_reconstruction_durations.empty()
-                ? "requires_sequence_aligned_snapshot_evidence"
-                : "observed"},
-           {"durations_by_channel",
-            std::move(full_reconstruction_distributions)},
+            full_reconstruction_observed
+                ? "observed"
+                : "requires_sequence_aligned_snapshot_evidence"},
        }},
       {"anomalies",
        boost::json::object{
@@ -535,7 +474,7 @@ int analyze_research_bundle(
       << "- Identity collisions: " << identity_collisions << "\n"
       << "- Sequence gaps/out-of-order: " << gaps << '/' << out_of_order
       << "\n"
-      << "- First usable BBO timing is distinct from full snapshot-aligned "
+      << "- A usable BBO is distinct from a complete sequence-aligned "
          "book reconstruction.\n"
       << "- Exchange and local receive clocks remain separate unless clock "
          "calibration is explicitly present.\n";

@@ -20,7 +20,6 @@
 #include <vector>
 
 #if defined(__linux__)
-#include <netinet/tcp.h>
 #include <sys/socket.h>
 #endif
 
@@ -374,21 +373,6 @@ void close_tls(TlsStream& stream) noexcept {
   beast::get_lowest_layer(stream).socket().close(ignored);
 }
 
-std::uint64_t elapsed_ms(
-    std::chrono::steady_clock::time_point start) noexcept {
-  const auto elapsed =
-      std::chrono::steady_clock::now() - start;
-  return static_cast<std::uint64_t>(
-      std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
-}
-
-std::uint64_t elapsed_us(
-    std::chrono::steady_clock::time_point start) noexcept {
-  const auto elapsed = std::chrono::steady_clock::now() - start;
-  return static_cast<std::uint64_t>(
-      std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
-}
-
 TransportMetadata transport_metadata(TlsStream& stream) noexcept {
   TransportMetadata result;
   try {
@@ -436,23 +420,6 @@ TransportMetadata transport_metadata(TlsStream& stream) noexcept {
       }
     }
 
-#if defined(__linux__)
-    tcp_info info{};
-    socklen_t size = sizeof(info);
-    if (::getsockopt(
-            beast::get_lowest_layer(stream).socket().native_handle(),
-            IPPROTO_TCP,
-            TCP_INFO,
-            &info,
-            &size) == 0) {
-      result.tcp_info_available = true;
-      result.tcp_rtt_us = info.tcpi_rtt;
-      result.tcp_rtt_variance_us = info.tcpi_rttvar;
-      result.tcp_retransmits = info.tcpi_total_retrans;
-      result.tcp_congestion_window = info.tcpi_snd_cwnd;
-      result.tcp_mss = info.tcpi_snd_mss;
-    }
-#endif
   } catch (...) {
     return result;
   }
@@ -482,14 +449,7 @@ void refresh_transport_metadata(
   }
   destination.tls_session_reused =
       destination.tls_session_reused || latest.tls_session_reused;
-  if (latest.tcp_info_available) {
-    destination.tcp_info_available = true;
-    destination.tcp_rtt_us = latest.tcp_rtt_us;
-    destination.tcp_rtt_variance_us = latest.tcp_rtt_variance_us;
-    destination.tcp_retransmits = latest.tcp_retransmits;
-    destination.tcp_congestion_window = latest.tcp_congestion_window;
-    destination.tcp_mss = latest.tcp_mss;
-  }
+
 }
 
 }  // namespace net_detail

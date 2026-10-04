@@ -19,7 +19,6 @@ find_package(Boost REQUIRED COMPONENTS json)
 add_library(exchange_probe_lib STATIC
     src/Runtime/Application.cpp
     src/Runtime/Cli.cpp
-    src/Research/Compare.cpp
     src/Contracts.cpp
     src/Network/Credentials.cpp
     src/Network/Gzip.cpp
@@ -28,7 +27,6 @@ add_library(exchange_probe_lib STATIC
     src/Network/NetCommon.cpp
     src/Presentation/Output.cpp
     src/Research/Placement.cpp
-    src/Profiles/Profiler.cpp
     src/Profiles/Profiles.cpp
     src/Profiles/ProfilesExtended.cpp
     src/Profiles/ProfilesMajor.cpp
@@ -79,3 +77,7 @@ install(FILES doc/ADAPTER_PROTOCOL.md
 
 add_custom_target(exchange-probe-product DEPENDS exchange-api-probe)
 add_custom_target(exchange-probe-all DEPENDS exchange-probe-product)
+
+if(CXET_LOCAL_TESTS)
+    cxet_offline_instrument(exchange_probe_lib)
+endif()

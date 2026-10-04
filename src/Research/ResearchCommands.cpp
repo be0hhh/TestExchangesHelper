@@ -164,22 +164,22 @@ void emit_profile_rows(
   };
 }
 
-[[nodiscard]] unsigned discovery_limit(PlacementMode mode) noexcept {
+[[nodiscard]] unsigned discovery_limit(DiscoveryMode mode) noexcept {
   switch (mode) {
-    case PlacementMode::Low: return 16U;
-    case PlacementMode::Standard: return 64U;
-    case PlacementMode::High: return kMaximumDiscoveryCandidates;
+    case DiscoveryMode::Low: return 16U;
+    case DiscoveryMode::Standard: return 64U;
+    case DiscoveryMode::High: return kMaximumDiscoveryCandidates;
   }
   return 16U;
 }
 
-[[nodiscard]] unsigned discovery_attempts(PlacementMode mode) noexcept {
-  return mode == PlacementMode::Low ? 1U : 2U;
+[[nodiscard]] unsigned discovery_attempts(DiscoveryMode mode) noexcept {
+  return mode == DiscoveryMode::Low ? 1U : 2U;
 }
 
 [[nodiscard]] std::chrono::milliseconds discovery_pause(
-    PlacementMode mode) noexcept {
-  return mode == PlacementMode::Low
+    DiscoveryMode mode) noexcept {
+  return mode == DiscoveryMode::Low
              ? std::chrono::milliseconds{500}
              : std::chrono::milliseconds{250};
 }
@@ -350,7 +350,7 @@ int run_discovery(
     return 2;
   }
   const auto limit = std::min<std::size_t>(
-      profile->discovery.size(), discovery_limit(options.placement_mode));
+      profile->discovery.size(), discovery_limit(options.discovery_mode));
   if (limit == 0U) {
     error_output << "discovery_error: profile_has_no_candidates\n";
     return 2;
@@ -388,7 +388,7 @@ int run_discovery(
     Observation best;
     bool success = false;
     for (unsigned attempt = 0U;
-         attempt < discovery_attempts(options.placement_mode);
+         attempt < discovery_attempts(options.discovery_mode);
          ++attempt) {
       auto limits = options.limits;
       limits.attempts = 1U;
@@ -406,8 +406,8 @@ int run_discovery(
       evidence << boost::json::serialize(row) << '\n';
       success = best.expectation_met;
       if (success) break;
-      if (attempt + 1U < discovery_attempts(options.placement_mode)) {
-        std::this_thread::sleep_for(discovery_pause(options.placement_mode));
+      if (attempt + 1U < discovery_attempts(options.discovery_mode)) {
+        std::this_thread::sleep_for(discovery_pause(options.discovery_mode));
       }
     }
     if (success) {
@@ -425,7 +425,7 @@ int run_discovery(
       });
     }
     if (index + 1U < limit) {
-      std::this_thread::sleep_for(discovery_pause(options.placement_mode));
+      std::this_thread::sleep_for(discovery_pause(options.discovery_mode));
     }
   }
   boost::json::object proposal{
