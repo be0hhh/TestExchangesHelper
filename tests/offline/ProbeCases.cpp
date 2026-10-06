@@ -10,6 +10,7 @@
 #include <iterator>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -20,6 +21,50 @@ void restSymbol() {
   const auto bad=validate_rest_contract(RestContract::BinanceTicker24h,row,"BBB");
   CXET_CHECK(good.logical_success && good.schema_success && good.symbol_success);
   CXET_CHECK(!bad.symbol_success);
+}
+void htxPublicEnvelope() {
+  // Official public REST envelope shapes; payload values are synthetic.
+  // https://huobiapi.github.io/docs/spot/v1/en/
+  // https://huobiapi.github.io/docs/usdt_swap/v1/en/
+  // This contract proves envelope shape only, including an empty data array;
+  // it deliberately does not validate payload numeric fields or symbol identity.
+  for (const auto* text : {
+      R"({"status":"ok","data":[{"id":7,"price":"synthetic"}]})",
+      R"({"status":"ok","data":[]})",
+      R"({"status":"ok","data":{"value":"synthetic"}})",
+      R"({"status":"ok","tick":{"bids":[["100","2"]],"asks":[["102","3"]]}})"}) {
+    const auto evidence = validate_rest_contract(
+        RestContract::HtxPublicEnvelope, boost::json::parse(text), "");
+    CXET_CHECK(evidence.logical_success && evidence.schema_success && evidence.symbol_success);
+    CXET_CHECK(evidence.contract == "htx_public_envelope" && evidence.native_symbol.empty());
+    CXET_CHECK(evidence.units == "envelope_only;numeric_units_not_validated");
+  }
+  const auto logical_error = validate_rest_contract(RestContract::HtxPublicEnvelope,
+      boost::json::parse(R"({"status":"error","err-code":"synthetic-error","data":[]})"), "");
+  CXET_CHECK(!logical_error.logical_success && !logical_error.schema_success);
+  CXET_CHECK(logical_error.api_code == "synthetic-error");
+  for (const auto* text : {R"([])", R"({"data":[]})", R"({"status":1,"data":[]})",
+      R"({"status":"ok"})", R"({"status":"ok","data":null})",
+      R"({"status":"ok","data":"invalid"})", R"({"status":"ok","tick":[]})"}) {
+    const auto evidence = validate_rest_contract(
+        RestContract::HtxPublicEnvelope, boost::json::parse(text), "");
+    CXET_CHECK(!evidence.schema_success && !evidence.error.empty());
+  }
+  const auto symbol = validate_rest_contract(RestContract::HtxPublicEnvelope,
+      boost::json::parse(R"({"status":"ok","data":[{"symbol":"AAA"}]})"), "AAA");
+  CXET_CHECK(!symbol.symbol_success && !symbol.schema_success);
+  CXET_CHECK(symbol.error == "htx_envelope_symbol_proof_unavailable");
+  for (const auto& profile : make_profiles()) {
+    if (profile.venue != "htx") continue;
+    for (const auto& request : profile.public_rest) {
+      CXET_CHECK(request.contract == RestContract::HtxPublicEnvelope && !request.native);
+      CXET_CHECK(request.expected_symbol.empty());
+    }
+    for (const auto& capability : profile.capabilities) {
+      if (capability.transport == Transport::Rest && capability.surface == Surface::Public)
+        CXET_CHECK(!capability.native);
+    }
+  }
 }
 void ackIdentity() {
   WsCase c{};c.ack_kind=WsAckKind::BinanceSubscription;c.expected_request_id="7";
@@ -167,10 +212,132 @@ void researchSemanticOutput() {
   const auto event = boost::json::parse(row).as_object();
   CXET_CHECK(event.at("monotonic_ns") == 100 && event.at("utc_ns") == 1000 && event.at("exchange_event_ns") == 123);
 }
+void htxResearchEndpointPairs() {
+  const auto loaded = load_research_catalog(
+      std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path() / "profiles");
+  CXET_CHECK(loaded.ok);
+  for (const auto* product : {"spot", "futures"}) {
+    const auto* profile = find_research_profile(loaded.catalog, "htx", product);
+    CXET_CHECK(profile != nullptr);
+    const bool spot = profile->product == "spot";
+    for (const auto& channel : profile->channels) {
+      if (channel.id.ends_with("_aws")) continue;
+      const auto* alternative = find_research_channel(*profile, channel.id + "_aws");
+      CXET_CHECK(alternative != nullptr);
+      CXET_CHECK(channel.host == (spot ? "api.huobi.pro" : "api.hbdm.com"));
+      CXET_CHECK(alternative->host == (spot ? "api-aws.huobi.pro" : "api.hbdm.vn"));
+      CXET_CHECK(channel.path == (spot ? "/ws" : "/linear-swap-ws"));
+      CXET_CHECK(alternative->path == channel.path && alternative->subscribe == channel.subscribe);
+      CXET_CHECK(channel.compression == "gzip" && alternative->compression == channel.compression);
+      CXET_CHECK(alternative->wire == channel.wire && alternative->kind == channel.kind);
+      CXET_CHECK(alternative->support == channel.support && alternative->capabilities == channel.capabilities);
+      CXET_CHECK(!alternative->subscribe_binary && alternative->port == channel.port);
+      CXET_CHECK(alternative->mapping.event_id_path == channel.mapping.event_id_path);
+      CXET_CHECK(alternative->mapping.trades_path == channel.mapping.trades_path);
+      if (channel.kind == ResearchChannelKind::Trade) {
+        // Official Trade Detail examples (reviewed 2026-10-05): spot replaces
+        // obsolete id with tradeId; linear swaps use symbol-local native id.
+        // https://huobiapi.github.io/docs/spot/v1/en/#trade-detail
+        // https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-subscribe-trade-detail-data
+        CXET_CHECK(channel.mapping.data_path == "tick.data");
+        CXET_CHECK(channel.mapping.event_id_path == (spot ? "tradeId" : "id"));
+        CXET_CHECK(channel.mapping.event_time_path == "ts" && channel.mapping.event_time_unit == "ms");
+        CXET_CHECK(channel.mapping.price_path == "price" && channel.mapping.quantity_path == "amount");
+        CXET_CHECK(channel.mapping.side_path == "direction" && channel.mapping.symbol_path.empty());
+        CXET_CHECK(channel.support == ResearchSupport::ObservedOnly);
+      }
+    }
+  }
+}
+void htxDiagnosticEndpointPairs() {
+  const auto profiles = make_profiles();
+  for (const auto& profile : profiles) {
+    if (profile.venue != "htx") continue;
+    const bool spot = profile.product == "spot";
+    for (const auto& channel : profile.public_ws) {
+      if (channel.name.ends_with("_aws") || (spot && channel.path != "/ws")) continue;
+      const WsCase* alternative = nullptr;
+      for (const auto& candidate : profile.public_ws)
+        if (candidate.name == channel.name + "_aws") alternative = &candidate;
+      CXET_CHECK(alternative != nullptr);
+      CXET_CHECK(alternative->host == (spot ? "api-aws.huobi.pro" : "api.hbdm.vn"));
+      CXET_CHECK(alternative->path == channel.path && alternative->subscribe == channel.subscribe);
+      CXET_CHECK(alternative->expected_symbol == channel.expected_symbol && alternative->expected_topic == channel.expected_topic);
+      CXET_CHECK(alternative->compression == Compression::Gzip && alternative->application_heartbeat == "htx");
+      CXET_CHECK(alternative->wire == channel.wire && alternative->data_kind == channel.data_kind);
+      CXET_CHECK(alternative->selection == Selection::DiagnosticVariant);
+    }
+    for (const auto& request : profile.public_rest) {
+      if (request.name.ends_with("_aws")) continue;
+      const RestCase* alternative = nullptr;
+      for (const auto& candidate : profile.public_rest)
+        if (candidate.name == request.name + "_aws") alternative = &candidate;
+      CXET_CHECK(alternative != nullptr);
+      CXET_CHECK(alternative->host == (spot ? "api-aws.huobi.pro" : "api.hbdm.vn"));
+      CXET_CHECK(alternative->path == request.path && alternative->capabilities == request.capabilities);
+      CXET_CHECK(!alternative->private_case && alternative->auth == AuthKind::None);
+    }
+  }
+}
+void gateSbeCatalogAndFuturesRest() {
+  const auto loaded = load_research_catalog(
+      std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path() / "profiles");
+  CXET_CHECK(loaded.ok);
+  for (const auto* product : {"spot", "futures"}) {
+    const auto* profile = find_research_profile(loaded.catalog, "gate", product);
+    CXET_CHECK(profile != nullptr);
+    const bool spot = profile->product == "spot";
+    for (const auto* id : {"trades_sbe", "book_ticker_sbe", "orderbook_sbe"}) {
+      const auto* channel = find_research_channel(*profile, id);
+      CXET_CHECK(channel != nullptr);
+      CXET_CHECK(channel->support == ResearchSupport::AdapterRequired && channel->wire == "sbe");
+      CXET_CHECK(channel->host == (spot ? "api.gateio.ws" : "fx-ws.gateio.ws"));
+      CXET_CHECK(channel->path == (spot ? "/ws/v4/ws/spot/sbe?sbe_schema_id=2" : "/v4/ws/usdt/sbe?sbe_schema_id=1"));
+      CXET_CHECK(!channel->subscribe_binary && !channel->subscribe.empty());
+      const auto control = boost::json::parse(channel->subscribe).as_object();
+      CXET_CHECK(control.at("event") == "subscribe");
+      const std::string topic = std::string{spot ? "spot." : "futures."} +
+          (std::string_view{id} == "trades_sbe" ? "trades" :
+           std::string_view{id} == "book_ticker_sbe" ? "book_ticker" : "obu");
+      CXET_CHECK(control.at("channel") == topic);
+      CXET_CHECK(control.at("payload").as_array().size() == 1);
+      CXET_CHECK(control.at("payload").as_array().front() ==
+          (std::string_view{id} == "orderbook_sbe" ? "ob.{symbol}.50" : "{symbol}"));
+    }
+  }
+  const auto profiles = make_profiles();
+  for (const auto& profile : profiles) {
+    if (profile.venue != "gate") continue;
+    bool alternative_rest = false, native_sbe = false;
+    for (const auto& request : profile.public_rest) {
+      if (request.host != "fx-api.gateio.ws") continue;
+      alternative_rest = true;
+      CXET_CHECK(profile.product == "futures" && request.path.starts_with("/api/v4/futures/usdt/"));
+      CXET_CHECK(request.selection == Selection::DiagnosticVariant && !request.private_case);
+      const RestCase* ordinary = nullptr;
+      for (const auto& candidate : profile.public_rest)
+        if (request.name == candidate.name + "_fx") ordinary = &candidate;
+      CXET_CHECK(ordinary != nullptr && ordinary->host == "api.gateio.ws");
+      CXET_CHECK(ordinary->path == request.path && ordinary->capabilities == request.capabilities);
+      CXET_CHECK(ordinary->contract == request.contract && ordinary->expectation == request.expectation);
+    }
+    for (const auto& channel : profile.public_ws) {
+      if (channel.wire != Wire::Sbe) continue;
+      native_sbe = true;
+      CXET_CHECK(profile.product == "futures");
+      CXET_CHECK(!channel.subscribe_binary && channel.inbound_binary);
+      CXET_CHECK(channel.path == "/v4/ws/usdt/sbe?sbe_schema_id=1");
+      CXET_CHECK(channel.expected_sbe_schema == 1);
+    }
+    CXET_CHECK(native_sbe == (profile.product == "futures"));
+    CXET_CHECK(alternative_rest == (profile.product == "futures"));
+  }
+}
 }
 int main(int argc,char** argv) {
   const cxet::testing::Case cases[]{
     cxet::testing::Case{"helper.rest_contract_requires_exact_symbol",restSymbol},
+    cxet::testing::Case{"helper.htx_public_rest_envelope_refuses_errors_and_symbol_claims",htxPublicEnvelope},
     cxet::testing::Case{"helper.ws_ack_requires_request_identity_and_text_wire",ackIdentity},
     cxet::testing::Case{"helper.sbe_header_refuses_wrong_schema_and_truncation",sbeHeader},
     cxet::testing::Case{"helper.protobuf_envelope_refuses_truncated_length",protobufEnvelope},
@@ -180,5 +347,8 @@ int main(int argc,char** argv) {
     cxet::testing::Case{"helper.retained_catalog_cli_needs_no_performance_modes",retainedCatalogCli},
     cxet::testing::Case{"helper.observation_retains_capability_evidence_without_timings",observationCapabilityEvidence},
     cxet::testing::Case{"helper.research_retains_semantics_without_timing_reports",researchSemanticOutput},
+    cxet::testing::Case{"helper.htx_research_endpoint_pairs_preserve_product_grammar",htxResearchEndpointPairs},
+    cxet::testing::Case{"helper.htx_diagnostic_endpoint_pairs_preserve_public_contract",htxDiagnosticEndpointPairs},
+    cxet::testing::Case{"helper.gate_sbe_catalog_uses_text_controls_and_product_rest",gateSbeCatalogAndFuturesRest},
   };return cxet::testing::runCases(argc,argv,cases);
 }

@@ -1,2 +1,12 @@
-cxet_add_offline_suite(exchange_probe_offline_cases OWNER TestExchangesHelper EXPECTED 10
+cxet_add_offline_suite(exchange_probe_offline_cases OWNER TestExchangesHelper EXPECTED 14
   SOURCES ProbeCases.cpp LIBRARIES exchange_probe_lib LABELS contracts)
+cxet_add_offline_suite(exchange_probe_paired_cli_cases OWNER TestExchangesHelper EXPECTED 2
+  SOURCES PairedCliCases.cpp LIBRARIES exchange_probe_lib LABELS contracts cli)
+cxet_add_offline_suite(exchange_probe_paired_receipt_cases OWNER TestExchangesHelper EXPECTED 16
+  SOURCES PairedReceiptCases.cpp LIBRARIES exchange_probe_lib LABELS contracts htx receipts)
+cxet_add_offline_suite(exchange_probe_paired_rest_cases OWNER TestExchangesHelper EXPECTED 7
+  SOURCES PairedRestCases.cpp LIBRARIES exchange_probe_lib LABELS contracts htx rest)
+cxet_add_offline_suite(exchange_probe_ws_deadline_cases OWNER TestExchangesHelper EXPECTED 3
+  SOURCES WsDeadlineCases.cpp LIBRARIES exchange_probe_lib LABELS contracts transport deadline)
+cxet_add_offline_suite(exchange_probe_htx_reconnect_cases OWNER TestExchangesHelper EXPECTED 6
+  SOURCES HtxReconnectCases.cpp LIBRARIES exchange_probe_lib LABELS contracts htx reconnect)

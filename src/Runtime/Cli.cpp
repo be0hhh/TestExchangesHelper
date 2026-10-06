@@ -309,6 +309,17 @@ CliParseResult parse_cli(int argc, char** argv) {
         return result;
       }
       result.options.channels.push_back(std::move(value));
+    } else if (option == "--standard-channel" || option == "--aws-channel") {
+      if (!option_value(argc, argv, index, option, value, result.error)) {
+        return result;
+      }
+      auto& selected = option == "--standard-channel"
+          ? result.options.standard_channel : result.options.aws_channel;
+      if (selected.has_value() || value.empty()) {
+        result.error = std::string{option} + " requires one nonempty channel ID";
+        return result;
+      }
+      selected = std::move(value);
     } else if (option == "--rounds") {
       if (!option_value(argc, argv, index, option, value, result.error)) {
         return result;
@@ -337,6 +348,19 @@ CliParseResult parse_cli(int argc, char** argv) {
   const bool research_run =
       result.options.command == Command::Research &&
       result.options.action == "run";
+  if (result.options.standard_channel || result.options.aws_channel) {
+    if (result.options.command != Command::Research ||
+        result.options.action != "analyze" ||
+        result.options.inputs.size() != 1U ||
+        !result.options.standard_channel || !result.options.aws_channel ||
+        result.options.standard_channel == result.options.aws_channel ||
+        result.options.surface == Surface::Private ||
+        result.options.env_file || result.options.confirm_private ||
+        result.options.confirm_session_lifecycle) {
+      result.error = "paired receipt analysis requires research analyze, one --input and distinct --standard-channel/--aws-channel public IDs";
+      return result;
+    }
+  }
   const bool private_session_command = research_run;
   if (placement &&
       result.options.surface == Surface::Private &&
@@ -491,7 +515,8 @@ void print_help(std::ostream& output) {
       << "  exchange-api-probe discover --venue NAME --product NAME [filters]\n"
       << "  exchange-api-probe research run --venue NAME --product NAME "
          "[--channel ID...]\n"
-      << "  exchange-api-probe research analyze --input BUNDLE\n"
+      << "  exchange-api-probe research analyze --input BUNDLE "
+         "[--standard-channel ID --aws-channel ID]\n"
       << "  exchange-api-probe serve [--input BUNDLE|RESULTS_ROOT]\n"
       << "Probe/capture options:\n"
       << "      [--surface public|private] [--transport rest|ws|fix]\n"

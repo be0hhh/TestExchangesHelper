@@ -32,6 +32,15 @@ inline constexpr std::string_view kResearchFindingsSchema =
     std::ostream& output,
     std::ostream& error_output);
 
+// Explicit diagnostic opt-in; compares complete-message receipts for the same
+// native trade identity. General semantic analysis never calls this seam.
+[[nodiscard]] int analyze_paired_research_receipts(
+    const std::filesystem::path& directory,
+    std::string_view standard_channel,
+    std::string_view aws_channel,
+    std::ostream& output,
+    std::ostream& error_output);
+
 [[nodiscard]] int serve_research_viewer(
     const std::filesystem::path& root,
     bool open_browser,

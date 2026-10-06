@@ -103,19 +103,19 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "api.huobi.pro", "/ws",
                   R"({"sub":"market.btcusdt.trade.detail","id":"probe"})",
                   "live_trades", "trade.detail", "btcusdt",
-                  anchor("src/src/Core/src/Exchanges/Htx/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Htx/Routing/Spot/Config.cpp",
                          "kSubscribeTrades"),
                   Compression::Gzip, "htx"),
           json_ws("book_ticker", "api.huobi.pro", "/ws",
                   R"({"sub":"market.btcusdt.bbo","id":"probe"})",
                   "live_bbo", ".bbo", "btcusdt",
-                  anchor("src/src/Core/src/Exchanges/Htx/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Htx/Routing/Spot/Config.cpp",
                          "kSubscribeBookTicker"),
                   Compression::Gzip, "htx"),
           json_ws("orderbook", "api.huobi.pro", "/feed",
                   R"({"sub":"market.btcusdt.mbp.20","id":"probe"})",
                   "live_l2", ".mbp.", "btcusdt",
-                  anchor("src/src/Core/src/Exchanges/Htx/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Htx/Routing/Spot/Config.cpp",
                          "kSubscribeOrderBook"),
                   Compression::Gzip, "htx"),
       },
@@ -146,19 +146,19 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "api.hbdm.com", "/linear-swap-ws",
                   R"({"sub":"market.BTC-USDT.trade.detail","id":"probe"})",
                   "live_trades", "trade.detail", "BTC-USDT",
-                  anchor("src/src/Core/src/Exchanges/Htx/LinearSwap/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Htx/Routing/Futures/Config.cpp",
                          "kSubscribeTrades"),
                   Compression::Gzip, "htx"),
           json_ws("book_ticker", "api.hbdm.com", "/linear-swap-ws",
                   R"({"sub":"market.BTC-USDT.bbo","id":"probe"})",
                   "live_bbo", ".bbo", "BTC-USDT",
-                  anchor("src/src/Core/src/Exchanges/Htx/LinearSwap/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Htx/Routing/Futures/Config.cpp",
                          "kSubscribeBookTicker"),
                   Compression::Gzip, "htx"),
           json_ws("orderbook", "api.hbdm.com", "/linear-swap-ws",
                   R"({"sub":"market.BTC-USDT.depth.size_20.high_freq","data_type":"incremental","id":"probe"})",
                   "live_l2", ".depth.", "BTC-USDT",
-                  anchor("src/src/Core/src/Exchanges/Htx/LinearSwap/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Htx/Routing/Futures/Config.cpp",
                          "kSubscribeOrderBook"),
                   Compression::Gzip, "htx"),
       },
@@ -166,6 +166,37 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           "Funding WebSocket is private in core; public coverage is REST-only.",
       },
   });
+
+  // Public alternatives retain the ordinary endpoint's product and grammar.
+  for (auto& product : products) {
+    if (product.venue != "htx") continue;
+    for (auto& request : product.public_rest) {
+      request.contract = RestContract::HtxPublicEnvelope;
+      request.native = false;
+    }
+    product.notes.emplace_back(
+        "Public REST validates the HTX common envelope only; payload numeric fields and symbol identity are not proven.");
+    const std::string host = product.product == "spot"
+                                 ? "api-aws.huobi.pro" : "api.hbdm.vn";
+    const auto rest_count = product.public_rest.size();
+    for (std::size_t index = 0; index != rest_count; ++index) {
+      auto alternative = product.public_rest[index];
+      alternative.name += "_aws";
+      alternative.host = host;
+      alternative.selection = Selection::DiagnosticVariant;
+      product.public_rest.push_back(std::move(alternative));
+    }
+    const auto ws_count = product.public_ws.size();
+    for (std::size_t index = 0; index != ws_count; ++index) {
+      // The spot /feed orderbook is outside the documented /ws pair.
+      if (product.product == "spot" && product.public_ws[index].path != "/ws") continue;
+      auto alternative = product.public_ws[index];
+      alternative.name += "_aws";
+      alternative.host = host;
+      alternative.selection = Selection::DiagnosticVariant;
+      product.public_ws.push_back(std::move(alternative));
+    }
+  }
 
   products.push_back(ProductSpec{
       .venue = "mexc",
@@ -186,19 +217,19 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
               "trades",
               R"({"method":"SUBSCRIPTION","params":["spot@public.aggre.deals.v3.api.pb@10ms@BTCUSDT"],"id":0})",
               "live_trades",
-              anchor("src/src/Core/src/Exchanges/Mexc/Spot/Config.cpp",
+              anchor("src/src/Core/src/Exchanges/Mexc/Routing/Spot/Config.cpp",
                      "kSubscribeTrades")),
           protobuf_ws(
               "book_ticker",
               R"({"method":"SUBSCRIPTION","params":["spot@public.aggre.bookTicker.v3.api.pb@10ms@BTCUSDT"],"id":0})",
               "live_bbo",
-              anchor("src/src/Core/src/Exchanges/Mexc/Spot/Config.cpp",
+              anchor("src/src/Core/src/Exchanges/Mexc/Routing/Spot/Config.cpp",
                      "kSubscribeBookTicker")),
           protobuf_ws(
               "orderbook",
               R"({"method":"SUBSCRIPTION","params":["spot@public.aggre.depth.v3.api.pb@10ms@BTCUSDT"],"id":0})",
               "live_l2",
-              anchor("src/src/Core/src/Exchanges/Mexc/Spot/Config.cpp",
+              anchor("src/src/Core/src/Exchanges/Mexc/Routing/Spot/Config.cpp",
                      "kSubscribeOrderBook")),
       },
       .notes = {
@@ -225,22 +256,22 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "contract.mexc.com", "/edge",
                   R"({"method":"sub.deal","param":{"symbol":"BTC_USDT"},"gzip":false})",
                   "live_trades", "deal", "BTC_USDT",
-                  anchor("src/src/Core/src/Exchanges/Mexc/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Mexc/Routing/Futures/Config.cpp",
                          "kSubscribeTrades")),
           json_ws("book_ticker", "contract.mexc.com", "/edge",
                   R"({"method":"sub.ticker","param":{"symbol":"BTC_USDT"},"gzip":false})",
                   "live_bbo", "ticker", "BTC_USDT",
-                  anchor("src/src/Core/src/Exchanges/Mexc/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Mexc/Routing/Futures/Config.cpp",
                          "kSubscribeBookTicker")),
           json_ws("orderbook", "contract.mexc.com", "/edge",
                   R"({"method":"sub.depth","param":{"symbol":"BTC_USDT"},"gzip":false})",
                   "live_l2", "depth", "BTC_USDT",
-                  anchor("src/src/Core/src/Exchanges/Mexc/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Mexc/Routing/Futures/Config.cpp",
                          "kSubscribeOrderBook")),
           json_ws("funding", "contract.mexc.com", "/edge",
                   R"({"method":"sub.funding.rate","param":{"symbol":"BTC_USDT"},"gzip":false})",
                   "funding", "funding.rate", "BTC_USDT",
-                  anchor("src/src/Core/src/Exchanges/Mexc/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Mexc/Routing/Futures/Config.cpp",
                          "kSubscribeFunding")),
       },
   });
@@ -263,17 +294,17 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "ws.poloniex.com", "/ws/public",
                   R"({"event":"subscribe","channel":["trades"],"symbols":["BTC_USDT"]})",
                   "live_trades", "trades", "BTC_USDT",
-                  anchor("src/src/Core/src/Exchanges/Poloniex/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Routing/SpotApiConfig.cpp",
                          "kSubscribeTrades")),
           json_ws("book_ticker", "ws.poloniex.com", "/ws/public",
                   R"({"event":"subscribe","channel":["book"],"symbols":["BTC_USDT"],"depth":5})",
                   "live_bbo", "book", "BTC_USDT",
-                  anchor("src/src/Core/src/Exchanges/Poloniex/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Routing/SpotApiConfig.cpp",
                          "kSubscribeBookTicker")),
           json_ws("orderbook", "ws.poloniex.com", "/ws/public",
                   R"({"event":"subscribe","channel":["book_lv2"],"symbols":["BTC_USDT"]})",
                   "live_l2", "book_lv2", "BTC_USDT",
-                  anchor("src/src/Core/src/Exchanges/Poloniex/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Routing/SpotApiConfig.cpp",
                          "kSubscribeOrderBook")),
       },
   });
@@ -297,17 +328,17 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "ws.poloniex.com", "/ws/v3/public",
                   R"({"event":"subscribe","channel":["trades"],"symbols":["BTC_USDT_PERP"]})",
                   "live_trades", "trades", "BTC_USDT_PERP",
-                  anchor("src/src/Core/src/Exchanges/Poloniex/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Routing/FuturesV3Config.cpp",
                          "kSubscribeTrades")),
           json_ws("book_ticker", "ws.poloniex.com", "/ws/v3/public",
                   R"({"event":"subscribe","channel":["book"],"symbols":["BTC_USDT_PERP"],"depth":5})",
                   "live_bbo", "book", "BTC_USDT_PERP",
-                  anchor("src/src/Core/src/Exchanges/Poloniex/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Routing/FuturesV3Config.cpp",
                          "kSubscribeBookTicker")),
           json_ws("orderbook", "ws.poloniex.com", "/ws/v3/public",
                   R"({"event":"subscribe","channel":["book_lv2"],"symbols":["BTC_USDT_PERP"]})",
                   "live_l2", "book_lv2", "BTC_USDT_PERP",
-                  anchor("src/src/Core/src/Exchanges/Poloniex/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Poloniex/Routing/FuturesV3Config.cpp",
                          "kSubscribeOrderBook")),
       },
   });
@@ -333,17 +364,17 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "stream.toobit.com", "/quote/ws/v1",
                   R"({"symbol":"BTCUSDT","topic":"trade","event":"sub","params":{"binary":false}})",
                   "live_trades", "trade", "BTCUSDT",
-                  anchor("src/src/Core/src/Exchanges/Toobit/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Toobit/ApiV1/Spot/Routing/Config.cpp",
                          "kSubscribeTrades")),
           json_ws("orderbook", "stream.toobit.com", "/quote/ws/v1",
                   R"({"symbol":"BTCUSDT","topic":"diffDepth","event":"sub","params":{"binary":false}})",
                   "live_l2", "diffDepth", "BTCUSDT",
-                  anchor("src/src/Core/src/Exchanges/Toobit/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Toobit/ApiV1/Spot/Routing/Config.cpp",
                          "kSubscribeOrderBook")),
           json_ws("book_ticker", "stream.toobit.com", "/quote/ws/v1",
                   R"({"symbol":"BTCUSDT","topic":"depth","event":"sub","params":{"binary":false,"limit":1}})",
                   "live_bbo", "depth", "BTCUSDT",
-                  anchor("src/src/Core/src/Exchanges/Toobit/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Toobit/ApiV1/Spot/Routing/Config.cpp",
                          "kSubscribeBookTicker")),
       },
   });
@@ -375,17 +406,17 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "stream.toobit.com", "/quote/ws/v1",
                   R"({"symbol":"BTC-SWAP-USDT","topic":"trade","event":"sub","params":{"binary":false}})",
                   "live_trades", "trade", "BTC-SWAP-USDT",
-                  anchor("src/src/Core/src/Exchanges/Toobit/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Toobit/FuturesApiV2/Futures/Routing/Config.cpp",
                          "kSubscribeTrades")),
           json_ws("orderbook", "stream.toobit.com", "/quote/ws/v1",
                   R"({"symbol":"BTC-SWAP-USDT","topic":"diffDepth","event":"sub","params":{"binary":false}})",
                   "live_l2", "diffDepth", "BTC-SWAP-USDT",
-                  anchor("src/src/Core/src/Exchanges/Toobit/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Toobit/FuturesApiV2/Futures/Routing/Config.cpp",
                          "kSubscribeOrderBook")),
           json_ws("book_ticker", "stream.toobit.com", "/quote/ws/v1",
                   R"({"symbol":"BTC-SWAP-USDT","topic":"bookTicker","event":"sub","params":{"binary":false}})",
                   "live_bbo", "bookTicker", "BTC-SWAP-USDT",
-                  anchor("src/src/Core/src/Exchanges/Toobit/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Toobit/FuturesApiV2/Futures/Routing/Config.cpp",
                          "kSubscribeBookTicker")),
       },
   });
@@ -408,17 +439,17 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "stream.xt.com", "/public",
                   R"({"method":"subscribe","params":["trade@btc_usdt"],"id":"1"})",
                   "live_trades", "trade", "btc_usdt",
-                  anchor("src/src/Core/src/Exchanges/Xt/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Xt/SpotV4/Spot/Routing/Config.cpp",
                          "kSubscribeTrades")),
           json_ws("orderbook", "stream.xt.com", "/public",
                   R"({"method":"subscribe","params":["depth_update@btc_usdt"],"id":"1"})",
                   "live_l2", "depth_update", "btc_usdt",
-                  anchor("src/src/Core/src/Exchanges/Xt/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Xt/SpotV4/Spot/Routing/Config.cpp",
                          "kSubscribeOrderBook")),
           json_ws("book_ticker", "stream.xt.com", "/public",
                   R"({"method":"subscribe","params":["depth@btc_usdt,5"],"id":"1"})",
                   "live_bbo", "depth", "btc_usdt",
-                  anchor("src/src/Core/src/Exchanges/Xt/Spot/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Xt/SpotV4/Spot/Routing/Config.cpp",
                          "kSubscribeBookTicker")),
       },
   });
@@ -442,22 +473,22 @@ void append_extended_profiles(std::vector<ProductSpec>& products) {
           json_ws("trades", "fstream.xt.com", "/ws/market",
                   R"({"method":"SUBSCRIBE","params":["trade@btc_usdt"],"id":"1"})",
                   "live_trades", "trade", "btc_usdt",
-                  anchor("src/src/Core/src/Exchanges/Xt/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Xt/FuturesV1/Futures/Routing/Config.cpp",
                          "kSubscribeTrades")),
           json_ws("orderbook", "fstream.xt.com", "/ws/market",
                   R"({"method":"SUBSCRIBE","params":["depth_update@btc_usdt,100ms"],"id":"1"})",
                   "live_l2", "depth_update", "btc_usdt",
-                  anchor("src/src/Core/src/Exchanges/Xt/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Xt/FuturesV1/Futures/Routing/Config.cpp",
                          "kSubscribeOrderBook")),
           json_ws("book_ticker", "fstream.xt.com", "/ws/market",
                   R"({"method":"SUBSCRIBE","params":["depth@btc_usdt,5,100ms"],"id":"1"})",
                   "live_bbo", "depth", "btc_usdt",
-                  anchor("src/src/Core/src/Exchanges/Xt/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Xt/FuturesV1/Futures/Routing/Config.cpp",
                          "kSubscribeBookTicker")),
           json_ws("funding", "fstream.xt.com", "/ws/market",
                   R"({"method":"SUBSCRIBE","params":["fund_rate@btc_usdt"],"id":"1"})",
                   "funding", "fund_rate", "btc_usdt",
-                  anchor("src/src/Core/src/Exchanges/Xt/Futures/Config.cpp",
+                  anchor("src/src/Core/src/Exchanges/Xt/FuturesV1/Futures/Routing/Config.cpp",
                          "kSubscribeFunding")),
       },
       .notes = {

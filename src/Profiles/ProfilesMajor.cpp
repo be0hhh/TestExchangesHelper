@@ -74,10 +74,10 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               .session_kind = "market_data",
               .capability = "live_trades",
               .core_anchor = anchor(
-                  "src/src/Core/src/Exchanges/Binance/Spot/Config.cpp",
+                  "src/src/Core/src/Exchanges/Binance/Routing/Spot/Config.cpp",
                   "kSubscribeTradesFixSbe"),
               .payload_anchor = anchor(
-                  "src/src/Core/include/cxet/Exchanges/Binance/Spot/Fix/BinanceSpotFixSessionAuth.hpp",
+                  "src/src/Core/include/cxet/Exchanges/Binance/SpotFixSchema1_1/Spot/Fix/Helpers/Sbe/BinanceSpotFixSessionAuth.hpp",
                   "buildMarketDataFixPayload"),
           },
           {
@@ -87,10 +87,10 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               .session_kind = "market_data",
               .capability = "live_bbo",
               .core_anchor = anchor(
-                  "src/src/Core/src/Exchanges/Binance/Spot/Config.cpp",
+                  "src/src/Core/src/Exchanges/Binance/Routing/Spot/Config.cpp",
                   "kSubscribeBookTickerFixSbe"),
               .payload_anchor = anchor(
-                  "src/src/Core/include/cxet/Exchanges/Binance/Spot/Fix/BinanceSpotFixSessionAuth.hpp",
+                  "src/src/Core/include/cxet/Exchanges/Binance/SpotFixSchema1_1/Spot/Fix/Helpers/Sbe/BinanceSpotFixSessionAuth.hpp",
                   "buildMarketDataFixPayload"),
           },
           {
@@ -100,10 +100,10 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               .session_kind = "market_data",
               .capability = "live_l2",
               .core_anchor = anchor(
-                  "src/src/Core/src/Exchanges/Binance/Spot/Config.cpp",
+                  "src/src/Core/src/Exchanges/Binance/Routing/Spot/Config.cpp",
                   "kSubscribeOrderBookFixSbe"),
               .payload_anchor = anchor(
-                  "src/src/Core/include/cxet/Exchanges/Binance/Spot/Fix/BinanceSpotFixSessionAuth.hpp",
+                  "src/src/Core/include/cxet/Exchanges/Binance/SpotFixSchema1_1/Spot/Fix/Helpers/Sbe/BinanceSpotFixSessionAuth.hpp",
                   "buildMarketDataFixPayload"),
           },
       },
@@ -142,7 +142,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::BinanceTicker24h,
               "BTCUSDT",
               anchor(
-                  "src/src/Core/include/cxet/Exchanges/Binance/Fapi/Reference/ReferenceCatalog.hpp")),
+                  "src/src/Core/include/cxet/Exchanges/Binance/FapiV1/Futures/Rest/Reference/Json/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "fapi.binance.com",
@@ -198,7 +198,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               R"({"method":"SUBSCRIBE","params":["btcusdt@markPrice@1s"],"id":1})",
               {"funding_current_symbol"},
               anchor(
-                  "src/src/Core/src/Exchanges/Binance/Fapi/Config.cpp",
+                  "src/src/Core/src/Exchanges/Binance/Routing/Futures/Config.cpp",
                   "kSubscribeFunding"),
               WsAckKind::BinanceSubscription,
               "markPrice",
@@ -206,7 +206,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "1"),
       },
       .credential_anchor = credential_anchor(
-          "src/src/Core/src/Exchanges/Binance/Fapi/Config.cpp",
+          "src/src/Core/src/Exchanges/Binance/Routing/Futures/Config.cpp",
           "BINANCE_FUTURES_API"),
   });
 
@@ -426,14 +426,14 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               R"({"op":"subscribe","args":[{"channel":"trades-all","instId":"BTC-USDT"}]})",
               {"live_trades"},
               anchor(
-                  "src/src/Core/src/Exchanges/Okx/Spot/Config.cpp",
+                  "src/src/Core/src/Exchanges/Okx/Routing/Spot/Config.cpp",
                   "kSubscribeTrades"),
               WsAckKind::OkxSubscription,
               "trades-all",
               "BTC-USDT"),
       },
       .credential_anchor = credential_anchor(
-          "src/src/Core/src/Exchanges/Okx/Spot/Config.cpp",
+          "src/src/Core/src/Exchanges/Okx/Routing/Spot/Config.cpp",
           "OKX_SPOT_API"),
   });
 
@@ -465,7 +465,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::OkxTicker24h,
               "BTC-USDT-SWAP",
               anchor(
-                  "src/src/Core/include/cxet/Exchanges/Okx/Swap/Reference/ReferenceCatalog.hpp")),
+                  "src/src/Core/include/cxet/Exchanges/Okx/ApiV5/Futures/Rest/Reference/Json/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "www.okx.com",
@@ -521,14 +521,14 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               R"({"op":"subscribe","args":[{"channel":"funding-rate","instId":"BTC-USDT-SWAP"}]})",
               {"funding_current_symbol"},
               anchor(
-                  "src/src/Core/src/Exchanges/Okx/Swap/Config.cpp",
+                  "src/src/Core/src/Exchanges/Okx/Routing/Futures/Config.cpp",
                   "kSubscribeFunding"),
               WsAckKind::OkxSubscription,
               "funding-rate",
               "BTC-USDT-SWAP"),
       },
       .credential_anchor = credential_anchor(
-          "src/src/Core/src/Exchanges/Okx/Swap/Config.cpp",
+          "src/src/Core/src/Exchanges/Okx/Routing/Futures/Config.cpp",
           "OKX_FUTURES_API"),
   });
 
@@ -598,7 +598,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::GateTicker24h,
               "BTC_USDT",
               anchor(
-                  "src/src/Core/include/cxet/Exchanges/Gate/Usdt/Reference/ReferenceCatalog.hpp")),
+                  "src/src/Core/include/cxet/Exchanges/Gate/ApiV4/Futures/Rest/Reference/Json/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "api.gateio.ws",
@@ -607,7 +607,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::GateFunding,
               "BTC_USDT",
               anchor(
-                  "src/src/Core/include/cxet/Exchanges/Gate/Usdt/Market/Funding/FundingCurrentCatalog.hpp")),
+                  "tools/exchange_api_probe/src/Contracts.cpp")),
           std::move(gate_lowercase),
           public_rest(
               "funding_history",
@@ -654,7 +654,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_trades",
               2,
               anchor(
-                  "src/src/Core/src/Exchanges/Gate/Usdt/Config.cpp",
+                  "src/src/Core/src/Exchanges/Gate/ApiV4/Futures/Routing/Config.cpp",
                   "kSubscribeTradesSbe")),
           gate_sbe(
               "book_ticker_sbe",
@@ -663,7 +663,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_bbo",
               1,
               anchor(
-                  "src/src/Core/src/Exchanges/Gate/Usdt/Config.cpp",
+                  "src/src/Core/src/Exchanges/Gate/ApiV4/Futures/Routing/Config.cpp",
                   "kSubscribeBookTickerSbe")),
           gate_sbe(
               "orderbook_sbe",
@@ -672,13 +672,24 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_l2",
               0,
               anchor(
-                  "src/src/Core/src/Exchanges/Gate/Usdt/Config.cpp",
+                  "src/src/Core/src/Exchanges/Gate/ApiV4/Futures/Routing/Config.cpp",
                   "kSubscribeOrderBookSbe")),
       },
       .credential_anchor = credential_anchor(
-          "src/src/Core/src/Exchanges/Gate/Usdt/Config.cpp",
+          "src/src/Core/src/Exchanges/Gate/ApiV4/Futures/Routing/Config.cpp",
           "GATE_UTA_API"),
   });
+
+  // Gate documents a futures REST alternative, not a separate AWS host.
+  auto& gate_futures = products.back();
+  const auto gate_rest_count = gate_futures.public_rest.size();
+  for (std::size_t index = 0; index != gate_rest_count; ++index) {
+    auto alternative = gate_futures.public_rest[index];
+    alternative.name += "_fx";
+    alternative.host = "fx-api.gateio.ws";
+    alternative.selection = Selection::DiagnosticVariant;
+    gate_futures.public_rest.push_back(std::move(alternative));
+  }
 
   products.push_back(ProductSpec{
       .venue = "kucoin",
@@ -736,7 +747,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "trade",
               "BTC-USDT",
               anchor(
-                  "src/src/Core/src/Exchanges/Kucoin/Spot/Config.cpp",
+                  "src/src/Core/src/Exchanges/Kucoin/Routing/SpotConfig.cpp",
                   "kSubscribeTrades")),
           kucoin_ws(
               "book_ticker",
@@ -746,14 +757,14 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "obu",
               "BTC-USDT",
               anchor(
-                  "src/src/Core/src/Exchanges/Kucoin/Spot/Config.cpp",
+                  "src/src/Core/src/Exchanges/Kucoin/Routing/SpotConfig.cpp",
                   "kSubscribeBookTicker")),
       },
       .notes = {
           "KuCoin UTA Pro public WS is binary JSON and requires welcome before subscribe.",
       },
       .credential_anchor = credential_anchor(
-          "src/src/Core/src/Exchanges/Kucoin/Spot/Config.cpp",
+          "src/src/Core/src/Exchanges/Kucoin/Routing/SpotConfig.cpp",
           "KUCOIN_UTA_API"),
   });
 
@@ -785,7 +796,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::KucoinTicker24h,
               "XBTUSDTM",
               anchor(
-                  "src/src/Core/include/cxet/Exchanges/Kucoin/Uta/Reference/ReferenceCatalog.hpp")),
+                  "src/src/Core/include/cxet/Exchanges/Kucoin/UtaShared/Futures/Rest/Reference/Json/Instrument/ReferenceCatalog.hpp")),
           std::move(kucoin_lowercase),
           public_rest(
               "public_trades",
@@ -800,7 +811,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::KucoinFunding,
               "XBTUSDTM",
               anchor(
-                  "src/src/Core/include/cxet/Exchanges/Kucoin/Uta/Market/Funding/FundingCurrentCatalog.hpp")),
+                  "tools/exchange_api_probe/src/Contracts.cpp")),
           public_rest(
               "funding_history",
               "api-futures.kucoin.com",
@@ -850,7 +861,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "trade",
               "XBTUSDTM",
               anchor(
-                  "src/src/Core/src/Exchanges/Kucoin/Uta/Config.cpp",
+                  "src/src/Core/src/Exchanges/Kucoin/Routing/UtaConfig.cpp",
                   "kSubscribeTrades")),
           kucoin_ws(
               "funding",
@@ -860,11 +871,11 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "funding-fee",
               "XBTUSDTM",
               anchor(
-                  "src/src/Core/src/Exchanges/Kucoin/Uta/Config.cpp",
+                  "src/src/Core/src/Exchanges/Kucoin/Routing/UtaConfig.cpp",
                   "kSubscribeFunding")),
       },
       .credential_anchor = credential_anchor(
-          "src/src/Core/src/Exchanges/Kucoin/Uta/Config.cpp",
+          "src/src/Core/src/Exchanges/Kucoin/Routing/UtaConfig.cpp",
           "KUCOIN_UTA_API"),
   });
 
@@ -897,7 +908,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_trades",
               1003,
               anchor(
-                  "src/src/Core/src/Exchanges/Bitget/Uta/Config.cpp",
+                  "src/src/Core/src/Exchanges/Bitget/Routing/Config.cpp",
                   "kSpotSubscribeTradesSbe")),
           bitget_sbe(
               "book_ticker_sbe",
@@ -906,7 +917,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_bbo",
               1002,
               anchor(
-                  "src/src/Core/src/Exchanges/Bitget/Uta/Config.cpp",
+                  "src/src/Core/src/Exchanges/Bitget/Routing/Config.cpp",
                   "kSpotSubscribeBookTickerSbe")),
           bitget_sbe(
               "orderbook_sbe",
@@ -915,7 +926,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_l2",
               0,
               anchor(
-                  "src/src/Core/src/Exchanges/Bitget/Uta/Config.cpp",
+                  "src/src/Core/src/Exchanges/Bitget/Routing/Config.cpp",
                   "kSpotSubscribeOrderBookSbe")),
       },
       .notes = {
@@ -923,7 +934,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
           "No private REST profile is declared for spot.",
       },
       .credential_anchor = credential_anchor(
-          "src/src/Core/src/Exchanges/Bitget/Uta/Config.cpp",
+          "src/src/Core/src/Exchanges/Bitget/Routing/Config.cpp",
           "BITGET_UTA_API"),
   });
 
@@ -945,7 +956,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               RestContract::BitgetTicker24h,
               "BTCUSDT",
               anchor(
-                  "src/src/Core/include/cxet/Exchanges/Bitget/Uta/Reference/ReferenceCatalog.hpp")),
+                  "src/src/Core/include/cxet/Exchanges/Bitget/UtaV3/Shared/Rest/Reference/Json/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "api.bitget.com",
@@ -999,7 +1010,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_trades",
               1003,
               anchor(
-                  "src/src/Core/src/Exchanges/Bitget/Uta/Config.cpp",
+                  "src/src/Core/src/Exchanges/Bitget/Routing/Config.cpp",
                   "kSubscribeTradesSbe")),
           bitget_sbe(
               "book_ticker_sbe",
@@ -1008,7 +1019,7 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_bbo",
               1002,
               anchor(
-                  "src/src/Core/src/Exchanges/Bitget/Uta/Config.cpp",
+                  "src/src/Core/src/Exchanges/Bitget/Routing/Config.cpp",
                   "kSubscribeBookTickerSbe")),
           bitget_sbe(
               "orderbook_sbe",
@@ -1017,11 +1028,11 @@ void append_major_profiles(std::vector<ProductSpec>& products) {
               "live_l2",
               0,
               anchor(
-                  "src/src/Core/src/Exchanges/Bitget/Uta/Config.cpp",
+                  "src/src/Core/src/Exchanges/Bitget/Routing/Config.cpp",
                   "kSubscribeOrderBookSbe")),
       },
       .credential_anchor = credential_anchor(
-          "src/src/Core/src/Exchanges/Bitget/Uta/Config.cpp",
+          "src/src/Core/src/Exchanges/Bitget/Routing/Config.cpp",
           "BITGET_UTA_API"),
   });
 

@@ -96,6 +96,8 @@ enum class RestContract {
   GatePrivate,
   KucoinPrivate,
   BitgetPrivate,
+  // Diagnostic common public REST envelope; no payload numeric/symbol proof.
+  HtxPublicEnvelope,
 };
 
 enum class AuthKind {
@@ -255,6 +257,21 @@ struct HttpResult {
   TransportMetadata transport;
   std::string stage;
   std::string error;
+  // Diagnostic capture only: cold connection stages are absent on warm GETs.
+  std::optional<std::uint64_t> dns_ns;
+  std::optional<std::uint64_t> tcp_connect_ns;
+  std::optional<std::uint64_t> tls_handshake_ns;
+  std::optional<std::uint64_t> request_response_ns;
+  std::optional<std::uint64_t> request_failure_ns;
+  std::uint64_t dns_utc_ns{0};
+  std::vector<std::string> dns_answers;
+  bool connection_reused{false};
+  bool connection_available{false};
+  std::uint64_t request_start_monotonic_ns{0};
+  std::uint64_t response_receipt_monotonic_ns{0};
+  std::map<std::string, std::string> public_response_headers;
+  // Populated only by the public reusable connection, never signed one-shot.
+  std::string raw_body;
 };
 
 struct WsResult {

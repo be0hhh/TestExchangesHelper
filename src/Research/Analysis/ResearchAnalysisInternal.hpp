@@ -60,6 +60,8 @@ struct FrameIndex {
   std::uint64_t utc_ns{0U};
   std::uint64_t offset{0U};
   std::uint64_t length{0U};
+  std::optional<std::uint64_t> received_monotonic_ns;
+  std::optional<unsigned> session_generation;
 };
 
 struct ChannelDefinition {

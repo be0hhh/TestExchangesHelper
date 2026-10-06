@@ -80,9 +80,14 @@ namespace exchange_probe::research_analysis {
       return result;
     }
     const auto& object = value.as_object();
+    const auto round = u64(object, "round");
+    if (round > std::numeric_limits<unsigned>::max()) {
+      error = "frame_index_round_out_of_range";
+      return {};
+    }
     FrameIndex frame{
         .id = u64(object, "frame_id"),
-        .round = static_cast<unsigned>(u64(object, "round")),
+        .round = static_cast<unsigned>(round),
         .channel = text(object, "channel_id"),
         .binary = text(object, "opcode") == "binary",
         .monotonic_ns = u64(object, "monotonic_ns"),
@@ -90,6 +95,35 @@ namespace exchange_probe::research_analysis {
         .offset = u64(object, "offset"),
         .length = u64(object, "length"),
     };
+    const auto* generation = object.if_contains("session_generation");
+    const auto* attempt = object.if_contains("attempt");
+    if (generation != nullptr) {
+      const auto valid_unsigned = [](const boost::json::value& field) {
+        return field.is_uint64() || (field.is_int64() && field.as_int64() >= 0);
+      };
+      const auto number = u64(object, "session_generation");
+      if (!valid_unsigned(*generation) || number < 1U || number > 3U ||
+          (attempt != nullptr && (!valid_unsigned(*attempt) || u64(object, "attempt") != number))) {
+        error = "frame_session_generation_invalid";
+        return {};
+      }
+      frame.session_generation = static_cast<unsigned>(number);
+    } else if (attempt != nullptr) {
+      error = "frame_attempt_requires_session_generation";
+      return {};
+    }
+    if (const auto* receipt = object.if_contains("received_monotonic_ns");
+        receipt != nullptr) {
+      if (receipt->is_uint64()) {
+        frame.received_monotonic_ns = receipt->as_uint64();
+      } else if (receipt->is_int64() && receipt->as_int64() >= 0) {
+        frame.received_monotonic_ns =
+            static_cast<std::uint64_t>(receipt->as_int64());
+      } else {
+        error = "frame_receipt_timestamp_invalid";
+        return {};
+      }
+    }
     if (text(object, "schema") != kResearchFrameSchema ||
         frame.round == 0U || frame.channel.empty() ||
         !frame_ids.insert(frame.id).second ||

@@ -40,6 +40,7 @@ add_library(exchange_probe_lib STATIC
     src/Research/Analysis/Book.cpp
     src/Research/Analysis/Relations.cpp
     src/Research/ResearchCapture.cpp
+    src/Research/ResearchRestCapture.cpp
     src/Research/ResearchCommands.cpp
     src/Research/ResearchProfile.cpp
     src/Runtime/Sandbox.cpp

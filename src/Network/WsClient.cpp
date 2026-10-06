@@ -2,6 +2,8 @@
 
 #include "exchange_probe/Contracts.hpp"
 #include "NetCommon.hpp"
+#include "WsApplication.hpp"
+#include "WsDeadline.hpp"
 
 #include <boost/asio/ip/address.hpp>
 #include <boost/asio/ssl/context.hpp>
@@ -28,6 +30,7 @@ namespace ssl = asio::ssl;
 namespace websocket = beast::websocket;
 
 using WebSocket = websocket::stream<net_detail::TlsStream>;
+void close_socket(WebSocket& stream) noexcept;
 
 [[nodiscard]] bool timed_out(
     const boost::system::error_code& error) noexcept {
@@ -97,20 +100,6 @@ void configure_ws_timeout(
            interval->value().as_uint64() > 0));
 }
 
-[[nodiscard]] std::string application_pong(
-    const WsCase& probe_case,
-    const boost::json::value& value) {
-  if (probe_case.application_heartbeat != "htx" || !value.is_object()) {
-    return {};
-  }
-  const auto ping = value.as_object().find("ping");
-  if (ping == value.as_object().end()) {
-    return {};
-  }
-  return boost::json::serialize(
-      boost::json::object{{"pong", ping->value()}});
-}
-
 [[nodiscard]] bool async_write_message(
     asio::io_context& context,
     WebSocket& stream,
@@ -118,19 +107,15 @@ void configure_ws_timeout(
     bool binary,
     std::chrono::steady_clock::time_point deadline,
     std::string& error) {
-  boost::system::error_code operation_error;
-  bool complete = false;
   configure_ws_timeout(stream, deadline);
   stream.binary(binary);
-  stream.async_write(
-      asio::buffer(payload),
-      [&](const boost::system::error_code& ec, std::size_t) {
-        operation_error = ec;
-        complete = true;
-      });
-  context.run();
-  context.restart();
-  if (!complete || operation_error) {
+  const auto operation_error = net_detail::run_ws_deadline(
+      context, deadline,
+      [&](auto done) {
+        stream.async_write(asio::buffer(payload),
+            [done](const boost::system::error_code& ec, std::size_t) { done(ec); });
+      }, [&] { close_socket(stream); });
+  if (operation_error) {
     error = timed_out(operation_error)
                 ? "ws_write_timeout"
                 : operation_error.message();
@@ -152,18 +137,14 @@ struct ReadMessage {
     std::chrono::steady_clock::time_point deadline) {
   ReadMessage result;
   beast::flat_buffer buffer{kMaxWsMessageBytes};
-  boost::system::error_code operation_error;
-  bool complete = false;
   configure_ws_timeout(stream, deadline);
-  stream.async_read(
-      buffer,
-      [&](const boost::system::error_code& ec, std::size_t) {
-        operation_error = ec;
-        complete = true;
-      });
-  context.run();
-  context.restart();
-  if (!complete || operation_error) {
+  const auto operation_error = net_detail::run_ws_deadline(
+      context, deadline,
+      [&](auto done) {
+        stream.async_read(buffer,
+            [done](const boost::system::error_code& ec, std::size_t) { done(ec); });
+      }, [&] { close_socket(stream); });
+  if (operation_error) {
     result.error =
         operation_error == websocket::error::message_too_big ||
                 operation_error == asio::error::no_buffer_space
@@ -294,19 +275,12 @@ WsResult observe_ws(
         }));
     configure_ws_timeout(stream, deadline);
     beast::get_lowest_layer(stream).expires_never();
-    boost::system::error_code handshake_error;
-    bool handshake_complete = false;
     result.protocol_stage = "ws_handshake";
-    stream.async_handshake(
-        probe_case.host,
-        probe_case.path,
-        [&](const boost::system::error_code& error) {
-          handshake_error = error;
-          handshake_complete = true;
-        });
-    context.run();
-    context.restart();
-    if (!handshake_complete || handshake_error) {
+    const auto handshake_error = net_detail::run_ws_deadline(
+        context, deadline,
+        [&](auto done) { stream.async_handshake(probe_case.host, probe_case.path, done); },
+        [&] { close_socket(stream); });
+    if (handshake_error) {
       result.error = timed_out(handshake_error)
                          ? "ws_handshake_timeout"
                          : handshake_error.message();
@@ -359,7 +333,7 @@ WsResult observe_ws(
         break;
       }
       std::string application_payload = std::move(message.payload);
-      if (probe_case.compression == Compression::Gzip) {
+      if (probe_case.compression == Compression::Gzip && message.binary) {
         std::string decoded;
         std::string decode_error;
         if (!decode_gzip_bounded(
@@ -377,7 +351,11 @@ WsResult observe_ws(
       boost::json::value json;
       const bool json_present = json_message(application_payload, json);
       const auto pong =
-          json_present ? application_pong(probe_case, json) : std::string{};
+          json_present ? net_detail::application_pong(
+                             probe_case.application_heartbeat, json,
+                             result.error)
+                       : std::string{};
+      if (!result.error.empty()) break;
       if (!pong.empty()) {
         result.protocol_stage = "application_pong";
         if (!async_write_message(

@@ -14,6 +14,7 @@
 #include <limits>
 #include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -393,12 +394,15 @@ constexpr std::array<std::string_view, 3> kBitgetFundingRequired{
       return {Envelope::Bitget, "", {}, {}, ""};
     case C::None:
       return {};
+    case C::HtxPublicEnvelope:
+      // This contract has dedicated envelope validation, not a row schema.
+      throw std::logic_error{"htx_public_envelope_is_not_a_row_contract"};
   }
   return {};
 }
 
 [[nodiscard]] bool is_private_contract(RestContract contract) noexcept {
-  return contract >= RestContract::BinancePrivate;
+  return contract >= RestContract::BinancePrivate && contract <= RestContract::BitgetPrivate;
 }
 
 [[nodiscard]] bool json_string_equals(
@@ -562,6 +566,42 @@ ContractEvidence validate_rest_contract(
     std::string_view expected_symbol) {
   ContractEvidence evidence;
   evidence.contract = std::string{to_string(contract)};
+  if (contract == RestContract::HtxPublicEnvelope) {
+    evidence.units = "envelope_only;numeric_units_not_validated";
+    if (!expected_symbol.empty()) {
+      evidence.error = "htx_envelope_symbol_proof_unavailable";
+      return evidence;
+    }
+    if (!value.is_object()) {
+      evidence.error = "htx_public_envelope_not_object";
+      return evidence;
+    }
+    const auto& object = value.as_object();
+    const auto* status = member(object, "status");
+    evidence.api_code = scalar_text(member(object, "err-code"));
+    if (evidence.api_code.empty()) evidence.api_code = scalar_text(status);
+    evidence.logical_success = status != nullptr && status->is_string() &&
+        status->as_string() == "ok";
+    if (!evidence.logical_success) {
+      evidence.error = "exchange_logical_error";
+      return evidence;
+    }
+    const auto* data = member(object, "data");
+    const auto* tick = member(object, "tick");
+    const bool data_shape = data != nullptr && (data->is_object() || data->is_array());
+    const bool tick_shape = tick != nullptr && tick->is_object();
+    if (!data_shape && !tick_shape) {
+      evidence.missing_fields.emplace_back("data:object_or_array|tick:object");
+      evidence.error = "htx_public_envelope_payload_missing_or_invalid";
+      return evidence;
+    }
+    // No native symbol is observed. An empty expected_symbol requests no symbol
+    // constraint; it must not be interpreted as payload-level symbol evidence.
+    evidence.symbol_success = true;
+    evidence.schema_success = true;
+    evidence.row_count = data_shape && data->is_array() ? data->as_array().size() : 1U;
+    return evidence;
+  }
   if (contract == RestContract::None) {
     evidence.error = "contract_not_declared";
     return evidence;

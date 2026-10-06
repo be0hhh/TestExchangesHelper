@@ -58,6 +58,8 @@ struct CliOptions {
   std::string query;
   std::string symbol;
   std::vector<std::string> channels;
+  std::optional<std::string> standard_channel;
+  std::optional<std::string> aws_channel;
   unsigned rounds{3U};
   bool open_viewer{true};
   bool allow_adapter{false};

@@ -200,6 +200,9 @@ std::string_view to_string(RestContract value) noexcept {
       std::pair{
           RestContract::BitgetPrivate,
           std::string_view{"bitget_private"}},
+      std::pair{
+          RestContract::HtxPublicEnvelope,
+          std::string_view{"htx_public_envelope"}},
   };
   return enum_name(value, names, "unknown");
 }

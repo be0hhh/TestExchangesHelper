@@ -32,11 +32,11 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
           public_rest(
               "ticker_24h",
               "fapi.asterdex.com",
-              "/fapi/v1/ticker/24hr",
+              "/fapi/v3/ticker/24hr",
               {"ticker_24h"},
               RestContract::BinanceTicker24h,
               "BTCUSDT",
-              anchor("src/src/Core/include/cxet/Exchanges/Aster/Fapi/Reference/ReferenceCatalog.hpp")),
+              anchor("src/src/Core/include/cxet/Exchanges/Aster/FapiV3/Futures/Rest/Reference/Json/ReferenceCatalog.hpp")),
           public_rest(
               "funding_current",
               "fapi.asterdex.com",
@@ -45,7 +45,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
               RestContract::BinanceFunding,
               "BTCUSDT",
               anchor(
-                  "src/src/Core/include/cxet/Exchanges/Aster/Fapi/Market/Funding/FundingCurrentCatalog.hpp")),
+                  "src/src/Core/include/cxet/Exchanges/Aster/FapiV3/Futures/Rest/Reference/Json/ReferenceCatalog.hpp")),
           std::move(aster_lowercase),
           public_rest(
               "funding_history",
@@ -55,7 +55,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
           public_rest(
               "public_trades",
               "fapi.asterdex.com",
-              "/fapi/v1/aggTrades?symbol=BTCUSDT&limit=10",
+              "/fapi/v3/aggTrades?symbol=BTCUSDT&limit=10",
               {"historical_trades"}),
       },
       .public_ws = {
@@ -81,7 +81,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
       "/swap-market",
       R"({"id":"probe-bingx","reqType":"sub","dataType":"BTC-USDT@trade"})",
       {"live_trades"},
-      anchor("src/src/Core/src/Exchanges/Bingx/Swap/Config.cpp", "kSubscribeTrades"),
+      anchor("src/src/Core/src/Exchanges/Bingx/SwapV2/Futures/Routing/Config.cpp", "kSubscribeTrades"),
       WsAckKind::BingxSubscription,
       "BTC-USDT@trade",
       "BTC-USDT",
@@ -102,7 +102,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
       "/",
       R"({"id":0,"method":"trade_p.subscribe","params":["BTCUSDT"]})",
       {"live_trades"},
-      anchor("src/src/Core/src/Exchanges/Phemex/Usdm/Config.cpp", "kSubscribeTrades"),
+      anchor("src/src/Core/src/Exchanges/Phemex/ApiUnversioned/Futures/Routing/Config.cpp", "kSubscribeTrades"),
       WsAckKind::PhemexSubscription,
       "trade",
       "BTCUSDT",
@@ -113,7 +113,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
       "/",
       R"({"id":0,"method":"orderbook_p.subscribe","params":["BTCUSDT",false,30]})",
       {"live_l2"},
-      anchor("src/src/Core/src/Exchanges/Phemex/Usdm/Config.cpp", "kSubscribeOrderBook"),
+      anchor("src/src/Core/src/Exchanges/Phemex/ApiUnversioned/Futures/Routing/Config.cpp", "kSubscribeOrderBook"),
       WsAckKind::PhemexSubscription,
       "orderbook",
       "BTCUSDT",
@@ -125,7 +125,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
       R"({"id":0,"method":"orderbook_p.subscribe","params":["BTCUSDT",false,1]})",
       {"live_bbo"},
       anchor(
-          "src/src/Core/src/Exchanges/Phemex/Usdm/Config.cpp",
+          "src/src/Core/src/Exchanges/Phemex/ApiUnversioned/Futures/Routing/Config.cpp",
           "kSubscribeBookTicker"),
       WsAckKind::PhemexSubscription,
       "orderbook",
@@ -161,7 +161,7 @@ void append_misc_profiles(std::vector<ProductSpec>& products) {
               R"({"method":"subscribe","subscription":{"type":"trades","coin":"BTC"}})",
               {"live_trades"},
               anchor(
-                  "src/src/Core/src/Exchanges/Hyperliquid/Futures/Config.cpp",
+                  "src/src/Core/src/Exchanges/Hyperliquid/ApiUnversioned/Futures/Routing/Config.cpp",
                   "kSubscribeTrades"),
               WsAckKind::HyperliquidSubscription,
               "trades",
