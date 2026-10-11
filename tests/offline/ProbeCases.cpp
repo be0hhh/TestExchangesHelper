@@ -299,7 +299,7 @@ void gateSbeCatalogAndFuturesRest() {
       const std::string topic = std::string{spot ? "spot." : "futures."} +
           (std::string_view{id} == "trades_sbe" ? "trades" :
            std::string_view{id} == "book_ticker_sbe" ? "book_ticker" : "obu");
-      CXET_CHECK(control.at("channel") == topic);
+      CXET_CHECK(control.at("channel").as_string() == topic.c_str());
       CXET_CHECK(control.at("payload").as_array().size() == 1);
       CXET_CHECK(control.at("payload").as_array().front() ==
           (std::string_view{id} == "orderbook_sbe" ? "ob.{symbol}.50" : "{symbol}"));
