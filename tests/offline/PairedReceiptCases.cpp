@@ -326,6 +326,7 @@ void lifecycleUnavailable() {
   auto report = f.report();
   CXET_CHECK(report.at("lifecycle").as_object().at("status") == "unavailable_missing_sessions");
   CXET_CHECK(report.at("lifecycle").as_object().at("standard").as_object().at("disconnect_count").is_null());
+  CXET_CHECK(report.at("lifecycle").as_object().at("standard").as_object().at("successful_reconnects").is_null());
   CXET_CHECK(report.at("frame_generations").as_object().at("standard").as_object().at("status") == "unavailable");
   std::string rows;
   for (const auto* channel : {"standard", "aws"}) {
@@ -341,6 +342,7 @@ void lifecycleUnavailable() {
   for (const auto* channel : {"standard", "aws"}) {
     const auto& result = lifecycle.at(channel).as_object();
     CXET_CHECK(result.at("disconnect_count").is_null() && result.at("reconnect_duration_ns").is_null());
+    CXET_CHECK(result.at("successful_reconnects").is_null());
   }
 }
 void lifecycleQuantilesAndGenerations() {
@@ -376,6 +378,8 @@ void lifecycleQuantilesAndGenerations() {
   const auto& lifecycle = report.at("lifecycle").as_object();
   CXET_CHECK(lifecycle.at("status") == "observed");
   const auto& standard = lifecycle.at("standard").as_object();
+  CXET_CHECK(standard.at("disconnect_count").is_int64() || standard.at("disconnect_count").is_uint64());
+  CXET_CHECK(standard.at("successful_reconnects").is_int64() || standard.at("successful_reconnects").is_uint64());
   CXET_CHECK(standard.at("disconnect_count") == 2 && standard.at("successful_reconnects") == 2);
   const auto& times = standard.at("reconnect_duration_ns").as_object();
   CXET_CHECK(times.at("p50") == 30 && times.at("p95") == 80 && times.at("p99") == 80);

@@ -110,7 +110,7 @@ boost::json::object result_json(const RestCase& request, const HttpResult& resul
                                std::uint64_t offset) {
   boost::json::object timing;
   const auto add = [&](const char* name, const std::optional<std::uint64_t>& value) {
-    timing[name] = value ? boost::json::value{*value} : boost::json::value{nullptr};
+    timing[name] = value ? boost::json::value(*value) : boost::json::value(nullptr);
   };
   add("dns_ns", result.dns_ns);
   add("tcp_connect_ns", result.tcp_connect_ns);

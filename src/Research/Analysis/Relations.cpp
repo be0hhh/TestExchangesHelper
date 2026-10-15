@@ -217,8 +217,8 @@ struct Lifecycle {
     }
     result[index == 0 ? "standard" : "aws"] = boost::json::object{
         {"channel_id", index == 0 ? standard : aws}, {"session_rows", metrics.rows},
-        {"disconnect_count", available ? boost::json::value{metrics.disconnects} : boost::json::value{nullptr}},
-        {"successful_reconnects", available ? boost::json::value{metrics.reconnect_durations.size()} : boost::json::value{nullptr}},
+        {"disconnect_count", available ? boost::json::value(metrics.disconnects) : boost::json::value(nullptr)},
+        {"successful_reconnects", available ? boost::json::value(metrics.reconnect_durations.size()) : boost::json::value(nullptr)},
         {"reconnect_duration_ns", std::move(statistics)}};
   }
   return result;

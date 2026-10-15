@@ -35,6 +35,9 @@ void timeoutDrainsCancelledOperation() {
       context, Clock::now() + std::chrono::milliseconds{1},
       [&](auto done) { completion = done; },
       [&] {
+        // Repeated socket close still completes the one outstanding operation
+        // only once, including cancellation from its late completion path.
+        if (cancelled) return;
         cancelled = true;
         boost::asio::post(context, [&] {
           ++completions;
