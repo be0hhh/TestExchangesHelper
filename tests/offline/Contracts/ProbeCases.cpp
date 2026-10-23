@@ -214,7 +214,7 @@ void researchSemanticOutput() {
 }
 void htxResearchEndpointPairs() {
   const auto loaded = load_research_catalog(
-      std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path() / "profiles");
+      std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path().parent_path() / "profiles");
   CXET_CHECK(loaded.ok);
   for (const auto* product : {"spot", "futures"}) {
     const auto* profile = find_research_profile(loaded.catalog, "htx", product);
@@ -281,7 +281,7 @@ void htxDiagnosticEndpointPairs() {
 }
 void gateSbeCatalogAndFuturesRest() {
   const auto loaded = load_research_catalog(
-      std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path() / "profiles");
+      std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path().parent_path() / "profiles");
   CXET_CHECK(loaded.ok);
   for (const auto* product : {"spot", "futures"}) {
     const auto* profile = find_research_profile(loaded.catalog, "gate", product);
