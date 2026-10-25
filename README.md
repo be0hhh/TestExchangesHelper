@@ -22,6 +22,10 @@ The tool separates four kinds of evidence:
 None of these labels proves matching-engine location, trading readiness,
 causality, or production latency.
 
+A bounded Python public-only capture helper and its unexecuted command recipes
+are documented in [scripts/README.public_capture.md](scripts/README.public_capture.md).
+Its frozen diagnostic routes are independent of native profile selection.
+
 ## Build
 
 From this directory in the canonical CXET checkout:

@@ -1,0 +1,117 @@
+{
+  "schema": "exchange.public_capture.routes",
+  "reviewed_utc_date": "2026-10-25",
+  "purpose": "Frozen diagnostic public routes; does not select or modify native runtime routes",
+  "venues": {
+    "bybit": {
+      "excluded_surfaces": "Permissioned MMWS/SBE and authenticated private/order routes are unavailable to this helper; public V5 is a separately named diagnostic route, never a fallback.",
+      "products": {
+        "spot": {
+          "status": "available",
+          "symbol": "BTCUSDT",
+          "ws": [{
+            "id": "bybit_spot_v5_public",
+            "url": "wss://stream.bybit.com/v5/public/spot",
+            "subscribe": ["{\"op\":\"subscribe\",\"args\":[\"publicTrade.BTCUSDT\",\"orderbook.1.BTCUSDT\",\"tickers.BTCUSDT\"]}"],
+            "compression": "none",
+            "heartbeat": {"interval_seconds": 20, "send": "{\"op\":\"ping\"}"},
+            "provenance_urls": [
+              "https://bybit-exchange.github.io/docs/v5/ws/connect",
+              "https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook",
+              "https://bybit-exchange.github.io/docs/v5/websocket/public/trade",
+              "https://bybit-exchange.github.io/docs/v5/websocket/public/ticker"
+            ]
+          }],
+          "http": []
+        },
+        "linear": {
+          "status": "available",
+          "symbol": "BTCUSDT",
+          "ws": [{
+            "id": "bybit_linear_v5_public",
+            "url": "wss://stream.bybit.com/v5/public/linear",
+            "subscribe": ["{\"op\":\"subscribe\",\"args\":[\"publicTrade.BTCUSDT\",\"orderbook.1.BTCUSDT\",\"tickers.BTCUSDT\"]}"],
+            "compression": "none",
+            "funding_evidence": "tickers.BTCUSDT may include fundingRate/nextFundingTime; absent fields remain absent, no fixture is fabricated",
+            "heartbeat": {"interval_seconds": 20, "send": "{\"op\":\"ping\"}"},
+            "provenance_urls": [
+              "https://bybit-exchange.github.io/docs/v5/ws/connect",
+              "https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook",
+              "https://bybit-exchange.github.io/docs/v5/websocket/public/trade",
+              "https://bybit-exchange.github.io/docs/v5/websocket/public/ticker"
+            ]
+          }],
+          "http": []
+        }
+      }
+    },
+    "binance": {"products": {
+      "spot": {"status": "unavailable", "reason": "Exact public route/port and subscription catalog not yet frozen; permissioned FIX/SBE never substituted"},
+      "usd_m": {"status": "unavailable", "reason": "Exact current USD-M public/market endpoint split not yet frozen"}
+    }},
+    "bitget": {"products": {
+      "SPOT": {
+        "status": "available", "symbol": "BTCUSDT", "coverage": "public HTTPS recent fills only; WS/SBE not selected",
+        "ws": [], "http": [{
+          "id": "bitget_spot_uta_v3_fills", "url": "https://api.bitget.com/api/v3/market/fills?category=SPOT&symbol=BTCUSDT&limit=100",
+          "provenance_urls": ["https://www.bitget.com/legacy-docs/uta/public/Fills"]
+        }]
+      },
+      "USDT": {
+        "status": "available", "symbol": "BTCUSDT", "coverage": "public HTTPS recent fills and current funding only; WS/SBE not selected",
+        "ws": [], "http": [{
+          "id": "bitget_usdt_uta_v3_funding", "url": "https://api.bitget.com/api/v3/market/current-fund-rate?category=USDT-FUTURES&symbol=BTCUSDT",
+          "provenance_urls": ["https://www.bitget.com/legacy-docs/uta/public/Get-Current-Funding-Rate"]
+        }, {
+          "id": "bitget_usdt_uta_v3_fills", "url": "https://api.bitget.com/api/v3/market/fills?category=USDT-FUTURES&symbol=BTCUSDT&limit=100",
+          "provenance_urls": ["https://www.bitget.com/legacy-docs/uta/public/Fills"]
+        }]
+      }
+    }},
+    "bingx": {"products": {
+      "spot": {
+        "status": "available", "symbol": "BTC-USDT",
+        "ws": [{"id": "bingx_spot_public", "url": "wss://open-api-ws.bingx.com/market",
+          "subscribe": [
+            "{\"id\":\"00000000-0000-4000-8000-000000000001\",\"reqType\":\"sub\",\"dataType\":\"BTC-USDT@trade\"}",
+            "{\"id\":\"00000000-0000-4000-8000-000000000002\",\"reqType\":\"sub\",\"dataType\":\"BTC-USDT@bookTicker\"}",
+            "{\"id\":\"00000000-0000-4000-8000-000000000003\",\"reqType\":\"sub\",\"dataType\":\"BTC-USDT@depth50\"}"
+          ], "compression": "gzip", "heartbeat": {"reply_to_text": "Ping", "reply_when_contains": "ping", "reply_text": "Pong"},
+          "provenance_urls": [
+            "https://raw.githubusercontent.com/BingX-API/api-ai-skills/main/skills/spot-ws-market/api-reference.md",
+            "https://raw.githubusercontent.com/BingX-API/api-ai-skills/main/skills/references/websocket.md"
+          ]
+        }], "http": []
+      },
+      "swap": {
+        "status": "available", "symbol": "BTC-USDT",
+        "coverage": "public trade/BBO/limited-depth only; funding quote not frozen",
+        "ws": [{"id": "bingx_swap_public", "url": "wss://open-api-swap.bingx.com/swap-market",
+          "subscribe": [
+            "{\"id\":\"00000000-0000-4000-8000-000000000004\",\"reqType\":\"sub\",\"dataType\":\"BTC-USDT@trade\"}",
+            "{\"id\":\"00000000-0000-4000-8000-000000000005\",\"reqType\":\"sub\",\"dataType\":\"BTC-USDT@bookTicker\"}",
+            "{\"id\":\"00000000-0000-4000-8000-000000000006\",\"reqType\":\"sub\",\"dataType\":\"BTC-USDT@depth5@500ms\"}"
+          ], "compression": "gzip", "heartbeat": {"reply_to_text": "Ping", "reply_text": "Pong"},
+          "provenance_urls": ["https://raw.githubusercontent.com/BingX-API/api-ai-skills/main/skills/swap-ws-market/api-reference.md"]
+        }], "http": []
+      }
+    }},
+    "xt": {"products": {
+      "spot": {"status": "unavailable", "reason": "Official public route requires permessage-deflate negotiation; chosen bounded websocket library does not support it; no uncompressed fallback"},
+      "futures": {"status": "unavailable", "reason": "Official WebsocKetV2 recommends permessage-deflate and examples conflict; negotiated compression/capture recipe not frozen"}
+    }},
+    "aster": {"products": {"spot": {"status": "unavailable", "reason": "Exact public record not yet frozen"}, "futures": {"status": "unavailable", "reason": "Exact public record not yet frozen"}}},
+    "gate": {"products": {"spot": {"status": "unavailable", "reason": "Exact public record not yet frozen"}, "futures": {"status": "unavailable", "reason": "Exact public record not yet frozen"}}},
+    "kucoin": {"products": {"spot": {"status": "unavailable", "reason": "Public token bootstrap not implemented; no static URL fallback"}, "futures": {"status": "unavailable", "reason": "Public token bootstrap not implemented; no static URL fallback"}}},
+    "okx": {"products": {"spot": {"status": "unavailable", "reason": "Exact public record not yet frozen"}, "futures": {"status": "unavailable", "reason": "Exact public record not yet frozen"}}},
+    "toobit": {"products": {"spot": {"status": "unavailable", "reason": "Exact public record not yet frozen"}, "futures": {"status": "unavailable", "reason": "Exact public record not yet frozen"}}},
+    "mexc": {"products": {"spot": {"status": "unavailable", "reason": "Exact protobuf public record not yet frozen"}, "futures": {"status": "unavailable", "reason": "Exact public record not yet frozen"}}},
+    "htx": {"products": {"spot": {"status": "unavailable", "reason": "Exact gzip public record not yet frozen"}, "futures": {"status": "unavailable", "reason": "Exact gzip public record not yet frozen"}}},
+    "phemex": {"products": {"spot": {"status": "unavailable", "reason": "Exact public record not yet frozen"}, "futures": {"status": "unavailable", "reason": "Exact public record not yet frozen"}}},
+    "hyperliquid": {"products": {"futures": {"status": "unavailable", "reason": "Exact public perpetual route and funding context not yet frozen"}}},
+    "poloniex": {"products": {"spot": {"status": "unavailable", "reason": "Exact public record not yet frozen"}, "futures": {"status": "unavailable", "reason": "Exact public record not yet frozen"}}},
+    "finam": {"products": {"broker": {"status": "unavailable", "reason": "Authenticated broker capture is outside public helper scope"}}},
+    "tbank": {"products": {"broker": {"status": "unavailable", "reason": "Authenticated broker capture is outside public helper scope"}}},
+    "moex": {"products": {"reference": {"status": "unavailable", "reason": "Reference only; direct venue capture is outside selected scope"}}}
+  }
+}
