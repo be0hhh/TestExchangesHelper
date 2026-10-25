@@ -56,7 +56,7 @@ struct Fixture {
               {"symbol", payload_symbol ? "symbol" : ""}}}});
     }
     write("manifest.json", boost::json::serialize(boost::json::object{
-        {"schema", kResearchBundleSchema}, {"schema_version", 3},
+        {"schema", kResearchBundleSchema},
         {"venue", "htx"}, {"product", futures ? "futures" : "spot"},
         {"artifact_complete", true}, {"symbol", "AAA"},
         {"channels", std::move(channels)}}));
@@ -311,7 +311,7 @@ void roundNarrowingRefusal() {
 boost::json::object session(std::string_view channel, std::string_view stage,
                             unsigned generation,
                             std::optional<std::uint64_t> duration = std::nullopt) {
-  boost::json::object row{{"schema", "exchange.api_probe.session.v1"},
+  boost::json::object row{{"schema", "exchange.api_probe.session"},
       {"round", 1}, {"channel_id", channel}, {"stage", stage},
       {"ok", stage != "disconnected"}, {"monotonic_ns", 100},
       {"attempt", generation}, {"session_generation", generation}};

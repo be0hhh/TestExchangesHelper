@@ -125,7 +125,7 @@ boost::json::object result_json(const RestCase& request, const HttpResult& resul
   const auto contract = result.json_present
       ? validate_rest_contract(request.contract, result.json, request.expected_symbol)
       : ContractEvidence{};
-  return {{"schema", "exchange.api_probe.rest_receipt.v1"},
+  return {{"schema", "exchange.api_probe.rest_receipt"},
       {"round", round}, {"pair", pair}, {"phase", warmup ? "warmup" : "measured"},
       {"case", request.name}, {"host", request.host}, {"path", request.path},
       {"pair_utc_ns", pair_utc}, {"dns_utc_ns", result.dns_utc_ns},
@@ -207,7 +207,7 @@ int capture_paired_rest_research(const CliOptions& options, const ProductSpec& p
     error_output << "rest_research_error: artifact_open_failed\n";
     return 2;
   }
-  boost::json::object manifest{{"schema", "exchange.api_probe.rest_bundle.v1"},
+  boost::json::object manifest{{"schema", "exchange.api_probe.rest_bundle"},
       {"venue", profile.venue}, {"product", profile.product}, {"status", "incomplete"},
       {"started_utc_ns", utc_ns()}, {"environment", environment()},
       {"rounds_requested", options.rounds}, {"duration_seconds_per_round", options.duration_seconds.value_or(300U)},
@@ -339,7 +339,7 @@ int capture_paired_rest_research(const CliOptions& options, const ProductSpec& p
     return 1;
   }
   output << boost::json::serialize(boost::json::object{
-      {"schema", "exchange.api_probe.rest_capture_result.v1"},
+      {"schema", "exchange.api_probe.rest_capture_result"},
       {"directory", directory.string()}, {"status", complete ? "complete" : "incomplete"}}) << '\n';
   return complete ? 0 : 1;
 }

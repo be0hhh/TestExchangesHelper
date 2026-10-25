@@ -46,10 +46,6 @@ int analyze_research_bundle(
     error_output << "analysis_error: incompatible_bundle_schema\n";
     return 2;
   }
-  if (u64(*manifest, "schema_version") != 3U) {
-    error_output << "analysis_error: incompatible_bundle_version\n";
-    return 2;
-  }
   auto frames_index =
       read_frame_index(directory / "frames.jsonl", error);
   if (!error.empty()) {
@@ -179,7 +175,7 @@ int analyze_research_bundle(
       if (!event.bid_price.empty() && !event.ask_price.empty()) {
         ++valid_bbo_transitions;
         states_file << boost::json::serialize(boost::json::object{
-            {"schema", "exchange.api_probe.state_transition.v1"},
+            {"schema", "exchange.api_probe.state_transition"},
             {"event_id", event.id},
             {"round", event.round},
             {"channel_id", event.channel},
@@ -243,7 +239,7 @@ int analyze_research_bundle(
       if (valid && (bid != state.last_bid || ask != state.last_ask)) {
         ++valid_bbo_transitions;
         states_file << boost::json::serialize(boost::json::object{
-            {"schema", "exchange.api_probe.state_transition.v1"},
+            {"schema", "exchange.api_probe.state_transition"},
             {"event_id", event.id},
             {"round", event.round},
             {"channel_id", event.channel},

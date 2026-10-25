@@ -66,7 +66,6 @@ using GeoCache = std::map<std::string, boost::json::value>;
 }
 
 void emit(std::ostream& output, boost::json::object value) {
-  value["schema_version"] = 2;
   output << boost::json::serialize(value) << '\n';
 }
 

@@ -147,7 +147,6 @@ void observationCapabilityEvidence() {
   observation.transport_metadata.tls_version = "TLSv1.3";
   observation.stage = "complete"; observation.evidence = boost::json::object{{"symbol", "AAA"}};
   const auto result = observation_json(observation);
-  CXET_CHECK(result.at("schema_version") == 4);
   CXET_CHECK(result.at("expectation_met").as_bool() && result.at("transport_ok").as_bool());
   CXET_CHECK(result.at("evidence").as_object().at("symbol") == "AAA");
   CXET_CHECK(!result.contains("elapsed_ms") && !result.contains("stage_timings"));
@@ -179,13 +178,13 @@ struct ResearchFixture {
 };
 void researchSemanticOutput() {
   ResearchFixture fixture;
-  fixture.write("manifest.json", R"({"schema":"exchange.api_probe.bundle.v3","schema_version":3,"channels":[{"id":"a","kind":"depth","mapping":{"event_id":"id","bids":"bids","asks":"asks","snapshot":"snapshot","snapshot_value":"true","event_time":"E","event_time_unit":"ns"}},{"id":"b","kind":"depth","mapping":{"event_id":"id","bids":"bids","asks":"asks","snapshot":"snapshot","snapshot_value":"true","event_time":"E","event_time_unit":"ns"}}]})");
+  fixture.write("manifest.json", R"({"schema":"exchange.api_probe.bundle","channels":[{"id":"a","kind":"depth","mapping":{"event_id":"id","bids":"bids","asks":"asks","snapshot":"snapshot","snapshot_value":"true","event_time":"E","event_time_unit":"ns"}},{"id":"b","kind":"depth","mapping":{"event_id":"id","bids":"bids","asks":"asks","snapshot":"snapshot","snapshot_value":"true","event_time":"E","event_time_unit":"ns"}}]})");
   const std::string payload = R"({"id":"7","snapshot":true,"E":123,"bids":[["100","2"]],"asks":[["102","3"]]})";
   fixture.write("frames.bin", payload + payload);
   std::string index;
   for (unsigned n = 0; n != 2; ++n) {
     index += boost::json::serialize(boost::json::object{
-        {"schema", "exchange.api_probe.frame_index.v1"}, {"frame_id", n}, {"round", 1},
+        {"schema", "exchange.api_probe.frame_index"}, {"frame_id", n}, {"round", 1},
         {"channel_id", n == 0 ? "a" : "b"}, {"opcode", "text"},
         {"monotonic_ns", 100 + n * 100}, {"utc_ns", 1000 + n * 100},
         {"offset", n * payload.size()}, {"length", payload.size()}}) + "\n";
@@ -194,7 +193,7 @@ void researchSemanticOutput() {
   std::ostringstream output, errors;
   CXET_CHECK(analyze_research_bundle(fixture.directory, output, errors) == 0 && errors.str().empty());
   const auto findings = fixture.read("findings.json").as_object();
-  CXET_CHECK(findings.at("schema") == "exchange.api_probe.findings.v2");
+  CXET_CHECK(findings.at("schema") == "exchange.api_probe.findings");
   CXET_CHECK(findings.at("events") == 2 && findings.at("valid_bbo_transitions") == 2);
   CXET_CHECK(findings.at("full_bbo_reconstruction").as_object().at("status") == "observed");
   CXET_CHECK(findings.at("anomalies").as_object().at("exact_frame_duplicates") == 1);
@@ -204,7 +203,7 @@ void researchSemanticOutput() {
   std::ifstream relations{fixture.directory / "relations.jsonl"};
   std::string row; CXET_CHECK(static_cast<bool>(std::getline(relations, row)));
   const auto relation = boost::json::parse(row).as_object();
-  CXET_CHECK(relation.at("schema") == "exchange.api_probe.relation.v2");
+  CXET_CHECK(relation.at("schema") == "exchange.api_probe.relation");
   CXET_CHECK(relation.at("source_event_id") == 0 && relation.at("target_event_id") == 1);
   CXET_CHECK(relation.at("causality") == "not_asserted" && !relation.contains("receive_lag_ns"));
   std::ifstream events{fixture.directory / "events.jsonl"};

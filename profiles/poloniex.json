@@ -1,5 +1,5 @@
 {
-  "schema":"exchange.api_probe.profile.v1","venue":"poloniex","display_name":"Poloniex","provenance":"built_in",
+  "schema":"exchange.api_probe.profile","venue":"poloniex","display_name":"Poloniex","provenance":"built_in",
   "products":[
     {"id":"spot","default_symbol":"BTC_USDT","symbol_format":"{base}_{quote}","channels":[
       {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"ws.poloniex.com","port":443,"path":"/ws/public","subscribe":"{\"event\":\"subscribe\",\"channel\":[\"trades\"],\"symbols\":[\"{symbol}\"]}","compression":"none","capabilities":["live_trades"]},

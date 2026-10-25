@@ -1,5 +1,5 @@
 {
-  "schema": "exchange.api_probe.profile.v1",
+  "schema": "exchange.api_probe.profile",
   "venue": "gate",
   "display_name": "Gate",
   "provenance": "built_in",

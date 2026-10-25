@@ -1,7 +1,6 @@
 {
   "name": "exchange-api-probe-viewer",
   "private": true,
-  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",

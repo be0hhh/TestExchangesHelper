@@ -48,7 +48,6 @@ boost::json::object capability_json(
     const ProductSpec& product,
     const CapabilityRow& capability) {
   return {
-      {"schema_version", 3},
       {"kind", "capability"},
       {"venue", product.venue},
       {"product", product.product},
@@ -65,7 +64,6 @@ boost::json::object capability_json(
 
 boost::json::object observation_json(const Observation& observation) {
   boost::json::object result{
-      {"schema_version", 4},
       {"kind", observation.kind},
       {"venue", observation.venue},
       {"product", observation.product},

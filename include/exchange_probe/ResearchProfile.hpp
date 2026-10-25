@@ -13,7 +13,7 @@
 namespace exchange_probe {
 
 inline constexpr std::string_view kResearchProfileSchema =
-    "exchange.api_probe.profile.v1";
+    "exchange.api_probe.profile";
 inline constexpr std::size_t kMaximumProfileBytes = 4U * 1024U * 1024U;
 inline constexpr std::size_t kMaximumProfileChannels = 256U;
 inline constexpr std::size_t kMaximumDiscoveryCandidates = 1024U;

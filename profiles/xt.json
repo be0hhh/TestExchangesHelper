@@ -1,5 +1,5 @@
 {
-  "schema":"exchange.api_probe.profile.v1","venue":"xt","display_name":"XT","provenance":"built_in",
+  "schema":"exchange.api_probe.profile","venue":"xt","display_name":"XT","provenance":"built_in",
   "products":[
     {"id":"spot","default_symbol":"btc_usdt","symbol_format":"{base}_{quote}:lower","channels":[
       {"id":"trades","kind":"trade","support":"observed_only","transport":"ws","wire":"json","host":"stream.xt.com","port":443,"path":"/public","subscribe":"{\"method\":\"subscribe\",\"params\":[\"trade@{symbol}\"],\"id\":\"1\"}","compression":"none","capabilities":["live_trades"]},

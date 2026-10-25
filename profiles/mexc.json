@@ -1,5 +1,5 @@
 {
-  "schema":"exchange.api_probe.profile.v1","venue":"mexc","display_name":"MEXC","provenance":"built_in",
+  "schema":"exchange.api_probe.profile","venue":"mexc","display_name":"MEXC","provenance":"built_in",
   "products":[
     {"id":"spot","default_symbol":"BTCUSDT","symbol_format":"{base}{quote}","channels":[
       {"id":"trades_protobuf","kind":"trade","support":"adapter_required","transport":"ws","wire":"protobuf","host":"wbs-api.mexc.com","port":443,"path":"/ws","subscribe":"{\"method\":\"SUBSCRIPTION\",\"params\":[\"spot@public.aggre.deals.v3.api.pb@10ms@{symbol}\"],\"id\":0}","subscribe_binary":false,"compression":"none","adapter":"adapters/mexc_protobuf","capabilities":["live_trades"]},

@@ -245,7 +245,7 @@ int run_profile_command(
         proposal->if_contains("schema") == nullptr ||
         !proposal->at("schema").is_string() ||
         proposal->at("schema").as_string() !=
-            "exchange.api_probe.profile_proposal.v1" ||
+            "exchange.api_probe.profile_proposal" ||
         proposal->if_contains("venue") == nullptr ||
         !proposal->at("venue").is_string() ||
         proposal->if_contains("product") == nullptr ||
@@ -268,7 +268,7 @@ int run_profile_command(
       return 2;
     }
     boost::json::object review{
-        {"schema", "exchange.api_probe.promotion_review.v1"},
+        {"schema", "exchange.api_probe.promotion_review"},
         {"venue", venue},
         {"product", product},
         {"catalog_mutated", false},
@@ -400,7 +400,7 @@ int run_discovery(
       const auto probe_case = candidate_ws_case(candidate, symbol);
       best = run_public_ws(product, probe_case, limits);
       auto row = observation_json(best);
-      row["schema"] = "exchange.api_probe.discovery_evidence.v1";
+      row["schema"] = "exchange.api_probe.discovery_evidence";
       row["candidate"] = candidate.id;
       row["attempt"] = attempt + 1U;
       evidence << boost::json::serialize(row) << '\n';
@@ -429,7 +429,7 @@ int run_discovery(
     }
   }
   boost::json::object proposal{
-      {"schema", "exchange.api_probe.profile_proposal.v1"},
+      {"schema", "exchange.api_probe.profile_proposal"},
       {"venue", profile->venue},
       {"product", profile->product},
       {"source_profile_schema", kResearchProfileSchema},

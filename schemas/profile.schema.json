@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "exchange.api_probe.profile.v1",
+  "$id": "exchange.api_probe.profile",
   "title": "Exchange API Probe venue profile",
   "type": "object",
   "required": ["schema", "venue", "products"],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "exchange.api_probe.profile.v1"},
+    "schema": {"const": "exchange.api_probe.profile"},
     "venue": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
     "display_name": {"type": "string", "maxLength": 128},
     "provenance": {"enum": ["built_in", "documented", "observed", "candidate"]},

@@ -128,7 +128,7 @@ struct Lifecycle {
     const auto value = boost::json::parse(line, parse_error);
     if (parse_error || !value.is_object()) { error = "sessions_invalid_jsonl"; return false; }
     const auto& row = value.as_object();
-    if (text(row, "schema") != "exchange.api_probe.session.v1") {
+    if (text(row, "schema") != "exchange.api_probe.session") {
       error = "sessions_schema_invalid";
       return false;
     }
@@ -318,8 +318,7 @@ int analyze_paired_research_receipts(
   std::string error;
   auto manifest = read_object(directory / "manifest.json", error);
   if (!manifest.has_value()) return refuse(error);
-  if (text(*manifest, "schema") != kResearchBundleSchema ||
-      u64(*manifest, "schema_version") != 3U) {
+  if (text(*manifest, "schema") != kResearchBundleSchema) {
     return refuse("incompatible_bundle_schema");
   }
   const auto definitions = channel_definitions(*manifest);
@@ -488,7 +487,7 @@ int analyze_paired_research_receipts(
         {"by_generation", std::move(by_generation)}};
   }
   boost::json::object report{
-      {"schema", "exchange.api_probe.paired_receipts.v1"}, {"schema_version", 1},
+      {"schema", "exchange.api_probe.paired_receipts"},
       {"run_id", text(*manifest, "run_id")},
       {"venue", "htx"}, {"product", text(*manifest, "product")}, {"symbol", symbol},
       {"standard_channel", standard_channel}, {"aws_channel", aws_channel},

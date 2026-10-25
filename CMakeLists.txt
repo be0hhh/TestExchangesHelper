@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/CxetToolchain.cmake")
 endif()
-project(exchange_api_probe VERSION 3.0.0 LANGUAGES CXX)
+project(exchange_api_probe LANGUAGES CXX)
 
 include(GNUInstallDirs)
 

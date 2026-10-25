@@ -238,7 +238,7 @@ class ResearchBundleWriter {
       std::optional<std::uint64_t> reconnect_duration_ns = std::nullopt,
       std::optional<std::uint64_t> reconnect_wait_ns = std::nullopt) {
     boost::json::object row{
-        {"schema", "exchange.api_probe.session.v1"},
+        {"schema", "exchange.api_probe.session"},
         {"round", round},
         {"channel_id", channel},
         {"stage", stage},
@@ -275,7 +275,7 @@ class ResearchBundleWriter {
       unsigned attempt = 0U,
       unsigned session_generation = 0U) {
     boost::json::object row{
-        {"schema", "exchange.api_probe.control_frame.v1"},
+        {"schema", "exchange.api_probe.control_frame"},
         {"round", round},
         {"channel_id", channel},
         {"direction", direction},
@@ -352,7 +352,7 @@ class ResearchBundleWriter {
     const bool success = intended_success && !storage_failed_;
     if (success) {
       std::ofstream marker{directory_ / "COMPLETE", std::ios::binary};
-      marker << "exchange.api_probe.bundle.v3\n";
+      marker << "exchange.api_probe.bundle\n";
       marker.flush();
       if (!marker) {
         storage_failed_ = true;
@@ -427,7 +427,6 @@ class ResearchBundleWriter {
     }
     boost::json::object manifest{
         {"schema", kResearchBundleSchema},
-        {"schema_version", 3},
         {"run_id", run_id_},
         {"owner", "research"},
         {"status", status},
@@ -824,7 +823,7 @@ int capture_research_bundle(
     error_output
         << "research_error: private session capture requires a complete "
            "read-only lifecycle profile; no private research channel is "
-           "declared in profile schema v1\n";
+           "declared in profile schema\n";
     return 2;
   }
   if (options.capture_tls_keys) {

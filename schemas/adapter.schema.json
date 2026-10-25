@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "exchange.api_probe.adapter.v1",
+  "$id": "exchange.api_probe.adapter",
   "title": "Exchange API Probe adapter record",
   "oneOf": [
     {
       "type": "object",
       "required": ["schema", "kind", "frame_id", "channel_id", "payload_base64"],
       "properties": {
-        "schema": {"const": "exchange.api_probe.adapter.v1"},
+        "schema": {"const": "exchange.api_probe.adapter"},
         "kind": {"const": "frame"},
         "frame_id": {"type": "integer", "minimum": 0},
         "channel_id": {"type": "string"},
@@ -18,7 +18,7 @@
       "type": "object",
       "required": ["schema", "kind", "frame_id", "event_kind"],
       "properties": {
-        "schema": {"const": "exchange.api_probe.adapter.v1"},
+        "schema": {"const": "exchange.api_probe.adapter"},
         "kind": {"const": "event"},
         "frame_id": {"type": "integer", "minimum": 0},
         "event_kind": {"enum": ["trade", "book_ticker", "depth", "funding", "control"]}

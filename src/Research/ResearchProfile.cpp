@@ -725,7 +725,7 @@ boost::json::object validate_research_catalog(
     }
   }
   return {
-      {"schema", "exchange.api_probe.profile_validation.v1"},
+      {"schema", "exchange.api_probe.profile_validation"},
       {"ok", issues.empty()},
       {"products", catalog.products.size()},
       {"files", catalog.source_files.size()},
@@ -774,7 +774,7 @@ boost::json::object research_profile_json(
     });
   }
   return {
-      {"schema", "exchange.api_probe.profile_view.v1"},
+      {"schema", "exchange.api_probe.profile_view"},
       {"venue", profile.venue},
       {"product", profile.product},
       {"display_name", profile.display_name},

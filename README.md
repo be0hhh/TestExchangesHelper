@@ -67,7 +67,7 @@ this source migration does not establish a passing CI revision.
 ## Profiles
 
 Profiles are strict JSON documents under `profiles/`, described by
-`schemas/profile.v1.schema.json`. The built-in catalog contains 26
+`schemas/profile.schema.json`. The built-in catalog contains 26
 venue/product entries. Profile edits are intentionally separate from observed
 discovery evidence.
 
@@ -118,7 +118,7 @@ Use `--no-open` for automation. Without it, the localhost read-only viewer is
 started after capture and the browser is opened. Capture stores exact inbound
 frame bytes in `frames.bin` and an immutable index in `frames.jsonl`.
 
-Analyze an existing neutral v3 bundle without network access:
+Analyze an existing neutral bundle without network access:
 
 ```bash
 ./build/exchange-api-probe research analyze \
@@ -157,7 +157,7 @@ mutation are outside the tool.
 
 Private WebSocket and FIX research additionally require an explicit lifecycle
 profile and `--confirm-session-lifecycle`. A missing lifecycle fails closed.
-Profile schema v1 records adapter identities and the language-neutral protocol,
+Profile schema records adapter identities and the language-neutral protocol,
 but the native analyzer deliberately remains fail-closed with
 `binary_adapter_required`; subprocess execution is not enabled in this version.
 `--allow-adapter` and `--allow-private-adapter` reserve the future explicit
@@ -178,11 +178,11 @@ series, ping, throughput, histograms or speed rankings.
 `latency`, `stability`, `compare` and the old `run` alias are removed.
 `--lanes`, `--samples` and `--connection` are rejected. `--mode` selects only
 the existing discovery budget; `--duration-seconds` bounds research capture.
-Observation JSON uses `schema_version=4`; relation/findings outputs use their
-current `v2` schema identifiers. Raw receive/exchange timestamps, normalized
+Observation JSON and relation/findings outputs use their current shapes and
+unversioned schema identifiers. Raw receive/exchange timestamps, normalized
 identity, sequence/book validity and bounded-corpus completeness remain.
 
-## Bundle compatibility
+## Research bundles
 
-Research capture bundles use `exchange.api_probe.bundle.v3`. Older bundle
-formats are deliberately not migrated or silently interpreted as current bundles.
+Research capture bundles use `exchange.api_probe.bundle`. Only the current
+bundle shape is supported; no migration or compatibility aliases are provided.

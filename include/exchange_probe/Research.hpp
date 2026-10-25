@@ -10,15 +10,15 @@
 namespace exchange_probe {
 
 inline constexpr std::string_view kResearchBundleSchema =
-    "exchange.api_probe.bundle.v3";
+    "exchange.api_probe.bundle";
 inline constexpr std::string_view kResearchFrameSchema =
-    "exchange.api_probe.frame_index.v1";
+    "exchange.api_probe.frame_index";
 inline constexpr std::string_view kResearchEventSchema =
-    "exchange.api_probe.event.v1";
+    "exchange.api_probe.event";
 inline constexpr std::string_view kResearchRelationSchema =
-    "exchange.api_probe.relation.v2";
+    "exchange.api_probe.relation";
 inline constexpr std::string_view kResearchFindingsSchema =
-    "exchange.api_probe.findings.v2";
+    "exchange.api_probe.findings";
 
 [[nodiscard]] int capture_research_bundle(
     const CliOptions& options,
