@@ -1,10 +1,12 @@
 #include "exchange_probe/App.hpp"
+#include "exchange_probe/TbankGrpcDiagnostic.hpp"
 
 #include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <ostream>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -103,7 +105,10 @@ CliParseResult parse_cli(int argc, char** argv) {
     result.options.command = Command::Research;
     if (argc > 2 &&
         (std::string_view{argv[2]} == "run" ||
-         std::string_view{argv[2]} == "analyze")) {
+         std::string_view{argv[2]} == "analyze" ||
+         std::string_view{argv[2]} == "tbank-goaway" ||
+         std::string_view{argv[2]} == "tbank-lifetime" ||
+         std::string_view{argv[2]} == "tbank-ping-handoff")) {
       result.options.action = argv[2];
       option_start = 3;
     } else {
@@ -116,10 +121,60 @@ CliParseResult parse_cli(int argc, char** argv) {
     return result;
   }
 
+  const bool goaway = result.options.command == Command::Research &&
+                      result.options.action == "tbank-goaway";
+  const bool lifetime = result.options.command == Command::Research &&
+                        result.options.action == "tbank-lifetime";
+  const bool handoff = result.options.command == Command::Research &&
+                       result.options.action == "tbank-ping-handoff";
+  const bool tbank = goaway || lifetime || handoff;
+  if (tbank) {
+    result.options.open_viewer = false;
+    result.options.duration_seconds = 60U;
+    result.options.limits.timeout = std::chrono::milliseconds{5000};
+    result.options.max_artifact_bytes = 4U * 1024U * 1024U;
+  }
+  std::set<std::string_view> seen;
   for (int index = option_start; index < argc; ++index) {
     const std::string_view option = argv[index];
     std::string value;
-    if (option == "--jsonl") {
+    if (tbank) {
+      const bool allowed = handoff ? (option == "--ca-file" || option == "--output-dir" ||
+          option == "--timeout-ms" || option == "--max-artifact-bytes" || option == "--no-open") :
+          (option == "--engines" || option == "--env-file" || option == "--ca-file" ||
+          option == "--api-slot" || option == "--symbol" ||
+          option == "--duration-seconds" || option == "--overall-timeout-seconds" ||
+          option == "--timeout-ms" || option == "--attempts" ||
+          option == "--max-artifact-bytes" || option == "--output-dir" ||
+          option == "--no-open");
+      if (!allowed || !seen.insert(option).second ||
+          (option != "--no-open" &&
+           (index + 1 >= argc || std::string_view{argv[index + 1]}.starts_with("--")))) {
+        result.error = handoff ? "unsupported or repeated tbank-ping-handoff option"
+                               : "unsupported or repeated tbank-goaway option";
+        return result;
+      }
+    }
+    if (option == "--engines" || option == "--api-slot" ||
+        option == "--overall-timeout-seconds") {
+      if (!tbank) {
+        result.error = "option requires research tbank-goaway";
+        return result;
+      }
+      if (!option_value(argc, argv, index, option, value, result.error)) return result;
+      if (option == "--engines") {
+        result.options.engines = value;
+      } else {
+        const auto parsed = parse_unsigned(value);
+        if (!parsed || *parsed == 0U ||
+            *parsed > (option == "--api-slot" ? 255U : 600U)) {
+          result.error = "invalid tbank-goaway numeric option";
+          return result;
+        }
+        if (option == "--api-slot") result.options.api_slot = *parsed;
+        else result.options.overall_timeout_seconds = *parsed;
+      }
+    } else if (option == "--jsonl") {
       result.options.jsonl = true;
     } else if (option == "--no-open") {
       result.options.open_viewer = false;
@@ -190,6 +245,15 @@ CliParseResult parse_cli(int argc, char** argv) {
         return result;
       }
       result.options.env_file = value;
+    } else if (option == "--ca-file") {
+      if (!tbank) {
+        result.error = "--ca-file requires research tbank-goaway";
+        return result;
+      }
+      if (!option_value(argc, argv, index, option, value, result.error)) {
+        return result;
+      }
+      result.options.ca_file = value;
     } else if (option == "--timeout-ms") {
       if (!option_value(argc, argv, index, option, value, result.error)) {
         return result;
@@ -336,6 +400,25 @@ CliParseResult parse_cli(int argc, char** argv) {
     }
   }
 
+  if (tbank) {
+    if (result.options.engines != "cxet,nghttp2" ||
+        (!handoff && (!result.options.env_file || result.options.env_file->empty())) || !result.options.ca_file ||
+        result.options.ca_file->empty() || result.options.ca_file->native().size() > 4096U ||
+        result.options.ca_file->native().find('\0') != std::string::npos || !result.options.output_dir ||
+        result.options.output_dir->empty() ||
+        (!handoff && result.options.symbol != tbank_grpc::kSberUid) ||
+        (!handoff && (goaway ? *result.options.duration_seconds > 120U
+                : (*result.options.duration_seconds != 600U && *result.options.duration_seconds != 28800U))) ||
+        result.options.limits.timeout > std::chrono::milliseconds{goaway ? 10000 : 5000} ||
+        result.options.limits.attempts != 1U ||
+        result.options.max_artifact_bytes > 4U * 1024U * 1024U) {
+      result.error = handoff ? "invalid tbank-ping-handoff configuration"
+                             : "invalid tbank-goaway configuration";
+      return result;
+    }
+    result.ok = true;
+    return result;
+  }
   if (result.options.command == Command::Sandbox &&
       !result.options.sandbox_file.has_value()) {
     result.error = "sandbox requires --file";
@@ -515,6 +598,9 @@ void print_help(std::ostream& output) {
       << "  exchange-api-probe discover --venue NAME --product NAME [filters]\n"
       << "  exchange-api-probe research run --venue NAME --product NAME "
          "[--channel ID...]\n"
+      << "  exchange-api-probe research tbank-goaway --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH [--engines cxet,nghttp2] [--api-slot N] [--duration-seconds N] [--overall-timeout-seconds N] [--timeout-ms N] [--attempts 1] [--max-artifact-bytes N] [--no-open]\n"
+      << "  exchange-api-probe research tbank-lifetime --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH --duration-seconds 600|28800 [--api-slot N] [--timeout-ms 100..5000] [--attempts 1] [--max-artifact-bytes N]\n"
+      << "  exchange-api-probe research tbank-ping-handoff --ca-file PATH --output-dir PATH [--timeout-ms 100..5000] [--max-artifact-bytes N] [--no-open]\n"
       << "  exchange-api-probe research analyze --input BUNDLE "
          "[--standard-channel ID --aws-channel ID]\n"
       << "  exchange-api-probe serve [--input BUNDLE|RESULTS_ROOT]\n"

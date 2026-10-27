@@ -22,6 +22,86 @@ The tool separates four kinds of evidence:
 None of these labels proves matching-engine location, trading readiness,
 causality, or production latency.
 
+## T-Bank gRPC GOAWAY research
+
+The root-graph build includes a bounded, read-only comparison of the CXET gRPC
+client and an independent nghttp2 client. Standalone builds keep the independent
+client but refuse this paired command when the CXET adapter is unavailable.
+The diagnostic requires OpenSSL, Boost.JSON and the `libnghttp2` development
+package discoverable by `pkg-config`.
+
+The experiment connects both clients to the same numeric peer while retaining
+the T-Bank hostname for TLS and HTTP/2 authority. It observes four sequential
+phases: idle without PING, idle with 10-second PING, then two phases that each
+issue one public trading-status query per connection and keep one SBER order
+book stream open, swapping clients between the idle and stream roles. It opens
+at most two connections at once, performs no automatic reconnect, and never
+submits orders or calls account methods. A changed peer, missing subscription
+acknowledgement or transport error is reported as inconclusive.
+
+The selected env file must contain `TBANK_API_1_API`, using the same T-Bank
+Bearer token convention as CXET. Only this key is read for slot 1; no token or
+raw authenticated payload is written to the report. An existing protected
+Parser environment file can be selected directly without copying it.
+Select a CA bundle explicitly with `--ca-file`; both clients verify TLS against
+that path, with no fallback to another trust store. Relative paths are resolved
+from the working directory. From the repository root, the T-Bank Parser uses
+the bundle documented in [server/certs](../../server/certs/README.md).
+
+Example commands from the repository root, to run only after selecting the
+exact build and live actions:
+
+```bash
+CXET_BUILD_DIR=build/probes/tbank-goaway ./tools/exchange_api_probe/compile.sh portable tbank -j 1 --memory-limit-gib 8
+build/probes/tbank-goaway/tools/exchange_api_probe/exchange-api-probe research tbank-goaway --engines cxet,nghttp2 --env-file apps/hft-parser/.env --ca-file server/certs/tbank-ca.pem --api-slot 1 --symbol e6123145-9665-43e0-8413-cd61b8aa9b13 --duration-seconds 60 --overall-timeout-seconds 300 --timeout-ms 5000 --attempts 1 --max-artifact-bytes 4194304 --output-dir results/tbank-goaway --no-open
+```
+
+`research tbank-lifetime` is a separate diagnostic experiment. It requires
+`--duration-seconds 600` or `28800`, the same env file, CA, SBER UID and output
+directory, and both engines. It makes one empty `GetUserTariff` request, checks
+that the published unary groups cover both methods and that the experiment's
+maximum six status requests per minute fit every applicable published window,
+then schedules the two clients at 20-second intervals with a 10-second offset.
+The first two status slots are 10 and 20 seconds after tariff completion. Missed
+slots are not replayed; a slot delayed by a full 20-second period ends the
+experiment as incomplete. After READY there is no reconnect or RPC retry. Before
+the first READY, the standard CXET connector may try different DNS addresses
+following an initial connection failure. The artifact records physical age as
+unknown rather than inferring it from READY. The startup-only
+`--overall-timeout-seconds` bounds connection and tariff preparation; each RPC
+uses `--timeout-ms` in the range 100–5000. A GOAWAY, limit response, malformed or unexpected response,
+transport failure, deadline, peer mismatch or artifact limit ends the experiment
+as incomplete. Artifact output is bounded to 4 MiB and does not contain raw
+private responses or credentials.
+
+The published tariff does not reveal current shared usage or remaining quota.
+An operator must separately authorize accepting that unknown for this diagnostic
+experiment; it is not authorization for production keepalive or a guarantee of
+headroom. Build, test and live execution require separate selection.
+
+`research tbank-ping-handoff` is a separate diagnostic with no credentials or
+RPCs. It opens CXET and nghttp2 TLS connections to one numeric peer, starting
+the standby 10 seconds after primary READY. Both use a diagnostic 10-second
+idle PING interval. If primary sends a NO_ERROR GOAWAY with empty debug data within 60 seconds, the
+standby can queue at most one extra PING when no other PING is outstanding.
+The ACK must arrive strictly before the two-second deadline. It records
+queueing, handoff to TLS and an ACK matching the exact nonce as
+separate facts, then observes the standby for five seconds. Any unavailable
+standby, wrong or missing ACK, other error, GOAWAY or deadline gives an
+inconclusive result. No reconnect after READY or RPC retry occurs; normal
+initial CXET DNS connection attempts may use different addresses before READY.
+The output is bounded and contains no tokens or raw GOAWAY debug data. This
+experiment does not establish production PING safety; running it requires
+separate selection.
+
+Each invocation creates a new private run directory with a bounded JSONL event
+file. GOAWAY error and last-stream fields, received PING ACKs, locally reported
+errors and HTTP/gRPC statuses are distinct. A received CXET PING ACK does not
+expose whether it matched the client's pending nonce; the corresponding report
+field is `null`. Times are measured from each client's ready event, not from
+the unobserved opening of the physical socket. These observations do not by
+themselves establish why the peer closed the connection.
+
 A bounded Python public-only capture helper and its unexecuted command recipes
 are documented in [scripts/README.public_capture.md](scripts/README.public_capture.md).
 Its frozen diagnostic routes are independent of native profile selection.

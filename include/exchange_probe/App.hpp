@@ -12,6 +12,8 @@
 
 namespace exchange_probe {
 
+namespace tbank_grpc { struct Factories; }
+
 enum class Command {
   Help,
   Matrix,
@@ -44,6 +46,7 @@ struct CliOptions {
   std::optional<Transport> transport;
   std::optional<std::filesystem::path> sandbox_file;
   std::optional<std::filesystem::path> env_file;
+  std::optional<std::filesystem::path> ca_file;
   RunLimits limits;
   DiscoveryMode discovery_mode{DiscoveryMode::Standard};
   RouteMode route_mode{RouteMode::Natural};
@@ -57,6 +60,9 @@ struct CliOptions {
   std::string action;
   std::string query;
   std::string symbol;
+  std::string engines{"cxet,nghttp2"};
+  unsigned api_slot{1U};
+  unsigned overall_timeout_seconds{300U};
   std::vector<std::string> channels;
   std::optional<std::string> standard_channel;
   std::optional<std::string> aws_channel;
@@ -125,7 +131,22 @@ void emit_matrix(
 [[nodiscard]] int run_application(
     const CliOptions& options,
     std::ostream& output,
+    std::ostream& error_output,
+    const tbank_grpc::Factories* factories = nullptr);
+
+[[nodiscard]] int run_tbank_goaway(
+    const CliOptions& options,
+    const tbank_grpc::Factories& factories,
+    std::ostream& output,
     std::ostream& error_output);
+
+[[nodiscard]] int run_tbank_lifetime(
+    const CliOptions& options, const tbank_grpc::Factories& factories,
+    std::ostream& output, std::ostream& error_output);
+
+[[nodiscard]] int run_tbank_ping_handoff(
+    const CliOptions& options, const tbank_grpc::Factories& factories,
+    std::ostream& output, std::ostream& error_output);
 
 [[nodiscard]] int run_placement(
     const CliOptions& options,

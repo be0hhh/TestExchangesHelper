@@ -1,4 +1,5 @@
 #include "exchange_probe/App.hpp"
+#include "exchange_probe/TbankGrpcDiagnostic.hpp"
 
 #include <exception>
 #include <iostream>
@@ -11,7 +12,16 @@ int main(int argc, char** argv) {
       exchange_probe::print_help(std::cerr);
       return 2;
     }
-    return exchange_probe::run_application(parsed.options, std::cout, std::cerr);
+    const exchange_probe::tbank_grpc::Factories factories{
+        .nghttp2 = &exchange_probe::tbank_grpc::make_nghttp2_connection,
+#if defined(CXET_EXCHANGE_PROBE_WITH_CXET)
+        .cxet = &exchange_probe::tbank_grpc::make_cxet_connection,
+#else
+        .cxet = nullptr,
+#endif
+    };
+    return exchange_probe::run_application(parsed.options, std::cout, std::cerr,
+                                           &factories);
   } catch (const std::exception& error) {
     std::cerr << "internal_error: " << error.what() << '\n';
     return 4;

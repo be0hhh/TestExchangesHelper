@@ -15,6 +15,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost REQUIRED COMPONENTS json)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(NGHTTP2 REQUIRED IMPORTED_TARGET libnghttp2)
 
 add_library(exchange_probe_lib STATIC
     src/Runtime/Application.cpp
@@ -25,6 +27,8 @@ add_library(exchange_probe_lib STATIC
     src/Network/HttpClient.cpp
     src/Model.cpp
     src/Network/NetCommon.cpp
+    src/Network/TbankCredential.cpp
+    src/Network/TbankNghttp2.cpp
     src/Presentation/Output.cpp
     src/Research/Placement.cpp
     src/Profiles/Profiles.cpp
@@ -42,6 +46,8 @@ add_library(exchange_probe_lib STATIC
     src/Research/ResearchCapture.cpp
     src/Research/ResearchRestCapture.cpp
     src/Research/ResearchCommands.cpp
+    src/Research/TbankGrpcLifecycle.cpp
+    src/Research/TbankGrpcProtocol.cpp
     src/Research/ResearchProfile.cpp
     src/Runtime/Sandbox.cpp
     src/Presentation/ViewerServer.cpp
@@ -58,6 +64,7 @@ target_link_libraries(exchange_probe_lib
         OpenSSL::Crypto
         OpenSSL::SSL
         Boost::json
+        PkgConfig::NGHTTP2
         Threads::Threads
 )
 
@@ -70,6 +77,11 @@ endif()
 
 add_executable(exchange-api-probe src/Runtime/Main.cpp)
 target_link_libraries(exchange-api-probe PRIVATE exchange_probe_lib)
+if(CXET_ROOT_SOURCE_GRAPH)
+    target_sources(exchange-api-probe PRIVATE src/Network/TbankCxet.cpp)
+    target_compile_definitions(exchange-api-probe PRIVATE CXET_EXCHANGE_PROBE_WITH_CXET=1)
+    target_link_libraries(exchange-api-probe PRIVATE cxet::cxet_lib)
+endif()
 
 install(TARGETS exchange-api-probe RUNTIME DESTINATION bin)
 install(DIRECTORY profiles schemas DESTINATION share/exchange-api-probe)

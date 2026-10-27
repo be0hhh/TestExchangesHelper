@@ -51,7 +51,8 @@ namespace {
 int run_application(
     const CliOptions& options,
     std::ostream& output,
-    std::ostream& error_output) {
+    std::ostream& error_output,
+    const tbank_grpc::Factories* factories) {
   if (options.command == Command::Help) {
     print_help(output);
     return 0;
@@ -64,6 +65,18 @@ int run_application(
     return run_discovery(options, output, error_output);
   }
   if (options.command == Command::Research) {
+    if (options.action == "tbank-goaway" || options.action == "tbank-lifetime" ||
+        options.action == "tbank-ping-handoff") {
+      if (factories == nullptr) {
+        error_output << "configuration_error: tbank_goaway_unavailable\n";
+        return 2;
+      }
+      if (options.action == "tbank-ping-handoff")
+        return run_tbank_ping_handoff(options, *factories, output, error_output);
+      return options.action == "tbank-lifetime"
+          ? run_tbank_lifetime(options, *factories, output, error_output)
+          : run_tbank_goaway(options, *factories, output, error_output);
+    }
     return run_research(options, output, error_output);
   }
   if (options.command == Command::Serve) {
