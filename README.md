@@ -270,3 +270,56 @@ identity, sequence/book validity and bounded-corpus completeness remain.
 
 Research capture bundles use `exchange.api_probe.bundle`. Only the current
 bundle shape is supported; no migration or compatibility aliases are provided.
+
+## T-Bank market source research
+
+`research tbank-market-sources` uses only nghttp2 and the public market stream
+RPC. It sequentially opens four fresh connections: book EXCHANGE (1), book ALL
+(3), trades EXCHANGE (1), trades ALL (3). The instrument is fixed to SBER UID
+`e6123145-9665-43e0-8413-cd61b8aa9b13`; book depth is 50. It resolves the bank
+hostname once, selects the first numeric address, retains the original hostname
+for TLS SNI and HTTP/2 authority, and requires an explicit CA file. One connection
+is active at a time, with at most four TCP attempts. A connection failure,
+transport failure or mismatched peer stops all later phases. There is no retry,
+endpoint fallback or reconnect, and no account, order or tariff RPC.
+
+The following is a proposed invocation, requiring separate run authorization:
+
+```sh
+# Outer timeout bounds the process if operating-system DNS cancellation stalls.
+timeout --kill-after=5s 125s exchange-api-probe research tbank-market-sources \
+  --engines nghttp2 --env-file apps/hft-parser/.env \
+  --ca-file server/certs/tbank-ca.pem --api-slot 1 \
+  --symbol e6123145-9665-43e0-8413-cd61b8aa9b13 \
+  --duration-seconds 20 --overall-timeout-seconds 120 --timeout-ms 5000 \
+  --attempts 1 --max-artifact-bytes 4194304 \
+  --output-dir results/tbank-market-sources --no-open
+```
+
+Duration is at most 20 seconds per phase, with a 120-second overall budget and
+at most a 5000-ms connection/resolution deadline. DNS uses the existing bounded
+resolver; its platform cancellation behavior does not prove a strict internal
+wall-clock limit. An overall deadline that shortens a phase is inconclusive.
+
+A new private run directory (0700) contains `public-frames.bin`,
+`public-frames.index.jsonl` and `events.jsonl` (0600). The binary file concatenates
+complete public Message protobuf bodies, excluding gRPC framing. The index
+records phase, byte offset, length and local monotonic time. Bodies are written
+inside the borrowed callback lifetime before semantic inspection, including ACK
+rejections and malformed bodies. Incomplete filesystem writes are rolled back.
+There is no recording of authorization metadata, HTTP headers, bearer tokens,
+environment contents, private bodies, grpc-message text, GOAWAY debug bytes,
+PCAP or TLS keys.
+
+Capture is limited to 32 bodies and 384 KiB per phase, 64 KiB per body, and 4 MiB
+across all files including a reserved 64 KiB for summaries. After the sampling
+quota only bounded counters and source histograms continue. Artifact exhaustion,
+oversized input, malformed/schema-anomalous input or transport failure preserves
+available evidence with an inconclusive outcome. Summaries distinguish configured
+requests, queued requests and observed ACKs; an accepted ACK without data is
+`accepted_no_data`. Sources are reported as observed (1, 2, 3, absent, unknown),
+including values different from the configured request. ALL is never inferred
+from the request alone. The decoder checks bounded protobuf structure and selected
+UID/status/source/depth fields; it does not normalize prices, merge books, replay
+the production parser or establish fill/readiness guarantees. Production's source
+restriction to 1 is only a static fact and is unchanged by this diagnostic.

@@ -180,6 +180,113 @@ std::vector<std::byte> book_stream_request(std::string_view uid) {
   byte(out, 0x20); byte(out, 1u); // EXCHANGE
   return out;
 }
+std::vector<std::byte> market_source_request(MarketKind kind, unsigned source) {
+  if (source != 1u && source != 3u) return {};
+  if (kind == MarketKind::Book) {
+    auto out = book_stream_request(kSberUid);
+    out[7] = std::byte{50}; out.back() = static_cast<std::byte>(source);
+    return out;
+  }
+  std::vector<std::byte> out;
+  byte(out, 0x1a); byte(out, 44); byte(out, 8); byte(out, 1);
+  byte(out, 0x12); byte(out, 38); byte(out, 0x12); byte(out, 36); text(out, kSberUid);
+  byte(out, 0x18); byte(out, source);
+  return out;
+}
+namespace {
+// Validate known nested messages without interpreting financial values.
+MarketDecode nested_syntax(Bytes bytes, unsigned mode) noexcept {
+  Cursor c{bytes}; std::uint64_t seen = 0;
+  while (c.pos < bytes.size()) {
+    Field f; if (!c.next(f)) return MarketDecode::MalformedSyntax;
+    if (f.number > 2u) continue;
+    const auto bit = 1ull << f.number;
+    if (seen & bit) return MarketDecode::SchemaAnomaly;
+    seen |= bit;
+    if ((mode == 1u && f.number == 1u) ? f.wire != 2u : f.wire != 0u)
+      return MarketDecode::SchemaAnomaly;
+    if (mode == 1u && f.number == 1u) {
+      auto result = nested_syntax(f.bytes, 0u);
+      if (result != MarketDecode::Other) return result;
+    }
+  }
+  return MarketDecode::Other;
+}
+}
+MarketObservation inspect_market_source(Bytes body, MarketKind kind) noexcept {
+  MarketObservation o;
+  auto fail = [&](MarketDecode result) { o.result = result; return o; };
+  if (body.size() > kMaxBody) return fail(MarketDecode::SchemaAnomaly);
+  Cursor c{body}; Bytes payload; std::uint64_t selected = 0;
+  while (c.pos < body.size()) {
+    Field f; if (!c.next(f)) return fail(MarketDecode::MalformedSyntax);
+    if (f.number > 12u) continue;
+    if (selected || f.wire != 2u) return fail(MarketDecode::SchemaAnomaly);
+    selected = f.number; payload = f.bytes;
+  }
+  if (!selected) return fail(MarketDecode::SchemaAnomaly);
+  const bool book = kind == MarketKind::Book;
+  const bool ack = selected == (book ? 2u : 3u);
+  const bool data = selected == (book ? 7u : 6u);
+  if (!ack && !data) return o;
+  auto parse_row = [&](Bytes row) -> MarketDecode {
+    Cursor r{row}; std::uint64_t seen = 0;
+    while (r.pos < row.size()) {
+      Field f; if (!r.next(f)) return MarketDecode::MalformedSyntax;
+      const auto uid_tag = ack ? (book ? 4u : 3u) : (book ? 9u : 6u);
+      const auto source_tag = ack ? (book ? 7u : 0u) : (book ? 10u : 7u);
+      const auto status_tag = book ? 3u : 2u;
+      const bool repeated = !ack && book && (f.number == 4u || f.number == 5u);
+      const bool known = f.number <= (ack ? (book ? 7u : 3u) : (book ? 10u : 7u));
+      if (!known) continue;
+      if (!repeated) {
+        const auto bit = 1ull << f.number;
+        if (seen & bit) return MarketDecode::SchemaAnomaly;
+        seen |= bit;
+      }
+      if (f.number == uid_tag) {
+        if (f.wire != 2u) return MarketDecode::SchemaAnomaly;
+        o.uid = {reinterpret_cast<const char*>(f.bytes.data()), f.bytes.size()};
+        if (!valid_uid(o.uid)) return MarketDecode::SchemaAnomaly;
+      } else if (f.number == source_tag) {
+        if (f.wire != 0u) return MarketDecode::SchemaAnomaly;
+        o.source = f.value; o.source_present = true;
+      } else if (ack && f.number == status_tag) {
+        if (f.wire != 0u) return MarketDecode::SchemaAnomaly;
+        o.status = f.value; o.status_present = true;
+      } else if (book && f.number == 2u) {
+        if (f.wire != 0u) return MarketDecode::SchemaAnomaly;
+        o.depth = f.value; o.depth_present = true;
+      } else if (!ack && (repeated || f.number == (book ? 6u : 5u) || (!book && f.number == 3u))) {
+        if (f.wire != 2u) return MarketDecode::SchemaAnomaly;
+        auto result = nested_syntax(f.bytes, repeated ? 1u : 0u);
+        if (result != MarketDecode::Other) return result;
+      } else if (!ack && ((!book && (f.number == 2u || f.number == 4u)) || (book && f.number == 3u))) {
+        if (f.wire != 0u) return MarketDecode::SchemaAnomaly;
+      }
+    }
+    if (!ack && book && (!(seen & (1ull<<2u)) || !(seen & (1ull<<6u)))) return MarketDecode::SchemaAnomaly;
+    if (!ack && !book && ((seen & 0x3cull) != 0x3cull)) return MarketDecode::SchemaAnomaly;
+    if (ack && !o.status_present) return MarketDecode::SchemaAnomaly;
+    if ((!ack || o.status == 1u) && o.uid.empty()) return MarketDecode::SchemaAnomaly;
+    return ack ? MarketDecode::Ack : MarketDecode::Data;
+  };
+  if (data) { o.result = parse_row(payload); return o; }
+  Cursor a{payload}; bool row_seen = false, root_source_seen = false;
+  while (a.pos < payload.size()) {
+    Field f; if (!a.next(f)) return fail(MarketDecode::MalformedSyntax);
+    if (f.number == 2u) {
+      if (row_seen || f.wire != 2u) return fail(MarketDecode::SchemaAnomaly);
+      row_seen = true;
+      auto result = parse_row(f.bytes);
+      if (result != MarketDecode::Ack) return fail(result);
+    } else if (!book && f.number == 3u) {
+      if (root_source_seen || f.wire != 0u) return fail(MarketDecode::SchemaAnomaly);
+      root_source_seen = true; o.source_present = true; o.source = f.value;
+    }
+  }
+  return fail(row_seen ? MarketDecode::Ack : MarketDecode::SchemaAnomaly);
+}
 AckResult inspect_book_ack(Bytes body, std::string_view expected_uid) noexcept {
   if (body.size() > kMaxBody || !valid_uid(expected_uid)) return AckResult::Malformed;
   Cursor cursor{body};

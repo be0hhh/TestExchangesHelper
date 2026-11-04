@@ -14,6 +14,17 @@ namespace exchange_probe::tbank_grpc {
 // Invalid UIDs produce an empty body. These bodies exclude the gRPC frame prefix.
 [[nodiscard]] std::vector<std::byte> trading_status_request(std::string_view uid);
 [[nodiscard]] std::vector<std::byte> book_stream_request(std::string_view uid);
+// Diagnostic source observations never admit production market data.
+enum class MarketKind { Book, Trades };
+enum class MarketDecode { Other, Ack, Data, MalformedSyntax, SchemaAnomaly };
+struct MarketObservation {
+  MarketDecode result{MarketDecode::Other};
+  std::string_view uid; // borrowed, valid only with input body
+  std::uint64_t status{}, source{}, depth{};
+  bool source_present{}, status_present{}, depth_present{};
+};
+[[nodiscard]] std::vector<std::byte> market_source_request(MarketKind, unsigned source);
+[[nodiscard]] MarketObservation inspect_market_source(std::span<const std::byte>, MarketKind) noexcept;
 enum class AckResult { NotAck, Accepted, Rejected, Malformed };
 [[nodiscard]] AckResult inspect_book_ack(std::span<const std::byte> body,
                                          std::string_view expected_uid) noexcept;

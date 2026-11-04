@@ -134,6 +134,10 @@ void emit_matrix(
     std::ostream& error_output,
     const tbank_grpc::Factories* factories = nullptr);
 
+[[nodiscard]] int run_tbank_market_sources(
+    const CliOptions& options, const tbank_grpc::Factories& factories,
+    std::ostream& output, std::ostream& error_output);
+
 [[nodiscard]] int run_tbank_goaway(
     const CliOptions& options,
     const tbank_grpc::Factories& factories,

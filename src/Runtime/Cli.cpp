@@ -108,7 +108,8 @@ CliParseResult parse_cli(int argc, char** argv) {
          std::string_view{argv[2]} == "analyze" ||
          std::string_view{argv[2]} == "tbank-goaway" ||
          std::string_view{argv[2]} == "tbank-lifetime" ||
-         std::string_view{argv[2]} == "tbank-ping-handoff")) {
+         std::string_view{argv[2]} == "tbank-ping-handoff" ||
+         std::string_view{argv[2]} == "tbank-market-sources")) {
       result.options.action = argv[2];
       option_start = 3;
     } else {
@@ -127,12 +128,19 @@ CliParseResult parse_cli(int argc, char** argv) {
                         result.options.action == "tbank-lifetime";
   const bool handoff = result.options.command == Command::Research &&
                        result.options.action == "tbank-ping-handoff";
-  const bool tbank = goaway || lifetime || handoff;
+  const bool market_sources = result.options.command == Command::Research &&
+                              result.options.action == "tbank-market-sources";
+  const bool tbank = goaway || lifetime || handoff || market_sources;
   if (tbank) {
     result.options.open_viewer = false;
     result.options.duration_seconds = 60U;
     result.options.limits.timeout = std::chrono::milliseconds{5000};
     result.options.max_artifact_bytes = 4U * 1024U * 1024U;
+  }
+  if (market_sources) {
+    result.options.engines = "nghttp2";
+    result.options.duration_seconds = 20U;
+    result.options.overall_timeout_seconds = 120U;
   }
   std::set<std::string_view> seen;
   for (int index = option_start; index < argc; ++index) {
@@ -401,18 +409,20 @@ CliParseResult parse_cli(int argc, char** argv) {
   }
 
   if (tbank) {
-    if (result.options.engines != "cxet,nghttp2" ||
+    if (result.options.engines != (market_sources ? "nghttp2" : "cxet,nghttp2") ||
+        (market_sources && (result.options.overall_timeout_seconds > 120U ||
+                            result.options.max_artifact_bytes < 65536U)) ||
         (!handoff && (!result.options.env_file || result.options.env_file->empty())) || !result.options.ca_file ||
         result.options.ca_file->empty() || result.options.ca_file->native().size() > 4096U ||
         result.options.ca_file->native().find('\0') != std::string::npos || !result.options.output_dir ||
         result.options.output_dir->empty() ||
         (!handoff && result.options.symbol != tbank_grpc::kSberUid) ||
-        (!handoff && (goaway ? *result.options.duration_seconds > 120U
+        (!handoff && (market_sources ? *result.options.duration_seconds > 20U : goaway ? *result.options.duration_seconds > 120U
                 : (*result.options.duration_seconds != 600U && *result.options.duration_seconds != 28800U))) ||
         result.options.limits.timeout > std::chrono::milliseconds{goaway ? 10000 : 5000} ||
         result.options.limits.attempts != 1U ||
         result.options.max_artifact_bytes > 4U * 1024U * 1024U) {
-      result.error = handoff ? "invalid tbank-ping-handoff configuration"
+      result.error = market_sources ? "invalid tbank-market-sources configuration" : handoff ? "invalid tbank-ping-handoff configuration"
                              : "invalid tbank-goaway configuration";
       return result;
     }
@@ -599,6 +609,7 @@ void print_help(std::ostream& output) {
       << "  exchange-api-probe research run --venue NAME --product NAME "
          "[--channel ID...]\n"
       << "  exchange-api-probe research tbank-goaway --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH [--engines cxet,nghttp2] [--api-slot N] [--duration-seconds N] [--overall-timeout-seconds N] [--timeout-ms N] [--attempts 1] [--max-artifact-bytes N] [--no-open]\n"
+      << "  exchange-api-probe research tbank-market-sources --engines nghttp2 --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH [--duration-seconds 1..20] [--overall-timeout-seconds 1..120] [--timeout-ms 100..5000] [--attempts 1] [--max-artifact-bytes 65536..4194304] [--no-open]\n"
       << "  exchange-api-probe research tbank-lifetime --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH --duration-seconds 600|28800 [--api-slot N] [--timeout-ms 100..5000] [--attempts 1] [--max-artifact-bytes N]\n"
       << "  exchange-api-probe research tbank-ping-handoff --ca-file PATH --output-dir PATH [--timeout-ms 100..5000] [--max-artifact-bytes N] [--no-open]\n"
       << "  exchange-api-probe research analyze --input BUNDLE "

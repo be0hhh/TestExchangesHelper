@@ -66,11 +66,13 @@ int run_application(
   }
   if (options.command == Command::Research) {
     if (options.action == "tbank-goaway" || options.action == "tbank-lifetime" ||
-        options.action == "tbank-ping-handoff") {
+        options.action == "tbank-ping-handoff" || options.action == "tbank-market-sources") {
       if (factories == nullptr) {
         error_output << "configuration_error: tbank_goaway_unavailable\n";
         return 2;
       }
+      if (options.action == "tbank-market-sources")
+        return run_tbank_market_sources(options, *factories, output, error_output);
       if (options.action == "tbank-ping-handoff")
         return run_tbank_ping_handoff(options, *factories, output, error_output);
       return options.action == "tbank-lifetime"

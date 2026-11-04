@@ -10,9 +10,9 @@ cxet_add_offline_suite(exchange_probe_ws_deadline_cases OWNER TestExchangesHelpe
   SOURCES Ws/WsDeadlineCases.cpp LIBRARIES exchange_probe_lib LABELS contracts transport deadline)
 cxet_add_offline_suite(exchange_probe_htx_reconnect_cases OWNER TestExchangesHelper EXPECTED 6
   SOURCES Reconnect/HtxReconnectCases.cpp LIBRARIES exchange_probe_lib LABELS contracts htx reconnect)
-cxet_add_offline_suite(exchange_probe_tbank_protocol_cases OWNER TestExchangesHelper EXPECTED 4
+cxet_add_offline_suite(exchange_probe_tbank_protocol_cases OWNER TestExchangesHelper EXPECTED 5
   SOURCES Tbank/ProtocolCases.cpp LIBRARIES exchange_probe_lib LABELS contracts tbank grpc)
-cxet_add_offline_suite(exchange_probe_tbank_cli_credential_cases OWNER TestExchangesHelper EXPECTED 4
+cxet_add_offline_suite(exchange_probe_tbank_cli_credential_cases OWNER TestExchangesHelper EXPECTED 5
   SOURCES Tbank/CliCredentialCases.cpp LIBRARIES exchange_probe_lib LABELS contracts tbank grpc)
-cxet_add_offline_suite(exchange_probe_tbank_lifecycle_cases OWNER TestExchangesHelper EXPECTED 4
+cxet_add_offline_suite(exchange_probe_tbank_lifecycle_cases OWNER TestExchangesHelper EXPECTED 5
   SOURCES Tbank/LifecycleCases.cpp LIBRARIES exchange_probe_lib LABELS contracts tbank grpc)

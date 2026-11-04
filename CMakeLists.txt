@@ -47,6 +47,7 @@ add_library(exchange_probe_lib STATIC
     src/Research/ResearchRestCapture.cpp
     src/Research/ResearchCommands.cpp
     src/Research/TbankGrpcLifecycle.cpp
+    src/Research/TbankMarketSources.cpp
     src/Research/TbankGrpcProtocol.cpp
     src/Research/ResearchProfile.cpp
     src/Runtime/Sandbox.cpp

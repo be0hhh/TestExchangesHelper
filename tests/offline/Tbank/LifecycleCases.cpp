@@ -511,8 +511,11 @@ void ping_handoff_scenarios() {
 }
 } // namespace
 
+#include "MarketSourceCases.ipp"
+
 int main(int argc, char** argv) {
   const cxet::testing::Case cases[]{
+      {"tbank.lifecycle.market_sources_scenarios", market_sources_scenarios},
       {"tbank.lifecycle.missing_factory_refuses_before_io", missing_factory_refuses_before_io},
       {"tbank.lifecycle.simulated_goaway", simulated_lifecycle},
       {"tbank.lifecycle.lifetime_stops_and_privacy", lifetime_stops_and_privacy},

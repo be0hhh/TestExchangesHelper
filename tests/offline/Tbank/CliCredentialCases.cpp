@@ -49,6 +49,23 @@ void cliSelection() {
   CXET_CHECK(rejected);
 }
 
+void marketSourcesSelection() {
+  auto args=[](const char* flag,const char* value) {
+    return cli({"research","tbank-market-sources","--env-file","absent","--ca-file","ca.pem","--symbol",
+      "e6123145-9665-43e0-8413-cd61b8aa9b13","--output-dir","out",flag,value});
+  };
+  const auto valid=args("--engines","nghttp2");
+  CXET_CHECK(valid.ok && *valid.options.duration_seconds==20 && valid.options.overall_timeout_seconds==120 && !valid.options.open_viewer);
+  CXET_CHECK(!args("--engines","cxet,nghttp2").ok);
+  CXET_CHECK(!args("--duration-seconds","21").ok);
+  CXET_CHECK(!args("--overall-timeout-seconds","121").ok);
+  CXET_CHECK(!args("--timeout-ms","5001").ok);
+  CXET_CHECK(!args("--attempts","2").ok);
+  CXET_CHECK(!args("--max-artifact-bytes","4194305").ok);
+  CXET_CHECK(!args("--max-artifact-bytes","65535").ok);
+  CXET_CHECK(!args("--pcap","true").ok);
+  CXET_CHECK(!args("--duration-seconds","0").ok);
+}
 void credentialSelection() {
   const auto path = std::filesystem::temp_directory_path() /
       ("cxet-tbank-credential-synthetic-" + std::to_string(getpid()));
@@ -126,6 +143,7 @@ int main(int argc, char** argv) {
   const cxet::testing::Case cases[]{
       cxet::testing::Case{"helper.tbank_goaway_cli_selection", cliSelection},
       cxet::testing::Case{"helper.tbank_credential_selection", credentialSelection},
+      cxet::testing::Case{"helper.tbank_market_sources_cli", marketSourcesSelection},
       cxet::testing::Case{"helper.tbank_lifetime_cli_selection", lifetimeSelection},
       cxet::testing::Case{"helper.tbank_ping_handoff_cli_selection", pingHandoffSelection},
   };

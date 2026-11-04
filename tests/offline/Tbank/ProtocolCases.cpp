@@ -48,6 +48,32 @@ void acknowledgements() {
   CXET_CHECK(inspect_book_ack(bytes("\x12\x04\x12\x00\x12\x00"sv), uid) == AckResult::Malformed);
   CXET_CHECK(inspect_book_ack(std::vector<std::byte>(65537), uid) == AckResult::Malformed);
 }
+void market_sources_protocol() {
+  const auto book1=market_source_request(MarketKind::Book,1);
+  auto expected=book_stream_request(kSberUid);expected[7]=std::byte{50};
+  CXET_CHECK(book1==expected);
+  expected.back()=std::byte{3};
+  CXET_CHECK(market_source_request(MarketKind::Book,3)==expected);
+  auto trades=bytes("\x1a\x2c\x08\x01\x12\x26\x12\x24" "e6123145-9665-43e0-8413-cd61b8aa9b13" "\x18\x01");
+  CXET_CHECK(market_source_request(MarketKind::Trades,1)==trades);
+  trades.back()=std::byte{3};CXET_CHECK(market_source_request(MarketKind::Trades,3)==trades);
+  CXET_CHECK(market_source_request(MarketKind::Book,2).empty());
+  for(unsigned source : {0u,1u,2u,3u,99u}) {
+    auto row=bytes("\x10\x32\x32\x00\x4a\x24" "e6123145-9665-43e0-8413-cd61b8aa9b13"sv);
+    if(source){row.push_back(std::byte{0x50});row.push_back(static_cast<std::byte>(source));}
+    std::vector<std::byte> envelope{std::byte{0x3a},static_cast<std::byte>(row.size())};envelope.insert(envelope.end(),row.begin(),row.end());
+    const auto observation=inspect_market_source(envelope,MarketKind::Book);
+    CXET_CHECK(observation.result==MarketDecode::Data && observation.source_present==(source!=0) && observation.source==source);
+    if(source){envelope[1]=static_cast<std::byte>(row.size()+2);envelope.push_back(std::byte{0x50});envelope.push_back(std::byte{1});
+      CXET_CHECK(inspect_market_source(envelope,MarketKind::Book).result==MarketDecode::SchemaAnomaly);}
+  }
+  auto row=bytes("\x10\x01\x1a\x24" "e6123145-9665-43e0-8413-cd61b8aa9b13");
+  std::vector<std::byte> root{std::byte{0x12},static_cast<std::byte>(row.size())};root.insert(root.end(),row.begin(),row.end());root.push_back(std::byte{0x18});root.push_back(std::byte{3});
+  std::vector<std::byte> envelope{std::byte{0x1a},static_cast<std::byte>(root.size())};envelope.insert(envelope.end(),root.begin(),root.end());
+  const auto observation=inspect_market_source(envelope,MarketKind::Trades);
+  CXET_CHECK(observation.result==MarketDecode::Ack && observation.source==3 && observation.status==1);
+  envelope.pop_back();CXET_CHECK(inspect_market_source(envelope,MarketKind::Trades).result==MarketDecode::MalformedSyntax);
+}
 void tariff_limits() {
   auto group = [](std::string_view method, unsigned minute, unsigned second) {
     std::vector<std::byte> row;
@@ -144,6 +170,7 @@ int main(int argc, char** argv) {
       {"tbank.protocol.request_golden_bytes", requests},
       {"tbank.protocol.book_ack_admission", acknowledgements},
       {"tbank.protocol.tariff_limits", tariff_limits},
+      {"tbank.protocol.market_sources", market_sources_protocol},
       {"tbank.protocol.lifetime_schedule_and_response", lifetime_schedule_and_response},
   };
   return cxet::testing::runCases(argc, argv, cases);
