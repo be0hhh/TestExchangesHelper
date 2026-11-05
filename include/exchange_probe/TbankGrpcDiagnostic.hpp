@@ -16,6 +16,10 @@ inline constexpr std::string_view kUserTariffPath =
     "/tinkoff.public.invest.api.contract.v1.UsersService/GetUserTariff";
 inline constexpr std::string_view kMarketStreamPath =
     "/tinkoff.public.invest.api.contract.v1.MarketDataStreamService/MarketDataServerSideStream";
+inline constexpr std::string_view kInstrumentPath =
+    "/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetInstrumentBy";
+inline constexpr std::string_view kTradingSchedulesPath =
+    "/tinkoff.public.invest.api.contract.v1.InstrumentsService/TradingSchedules";
 inline constexpr std::string_view kSberUid = "e6123145-9665-43e0-8413-cd61b8aa9b13";
 
 // Diagnostic-only contract. Payload is borrowed and is valid only during the

@@ -273,53 +273,102 @@ bundle shape is supported; no migration or compatibility aliases are provided.
 
 ## T-Bank market source research
 
-`research tbank-market-sources` uses only nghttp2 and the public market stream
-RPC. It sequentially opens four fresh connections: book EXCHANGE (1), book ALL
-(3), trades EXCHANGE (1), trades ALL (3). The instrument is fixed to SBER UID
-`e6123145-9665-43e0-8413-cd61b8aa9b13`; book depth is 50. It resolves the bank
-hostname once, selects the first numeric address, retains the original hostname
-for TLS SNI and HTTP/2 authority, and requires an explicit CA file. One connection
-is active at a time, with at most four TCP attempts. A connection failure,
-transport failure or mismatched peer stops all later phases. There is no retry,
-endpoint fallback or reconnect, and no account, order or tariff RPC.
+`research tbank-market-sources` observes one explicit instrument UID through
+nghttp2. It first uses one connection for three sequential public unary RPCs:
+`GetInstrumentBy`, `TradingSchedules`, and `GetTradingStatuses`. The returned
+UID must match; the calendar section comes from `instrument.exchange`, not MIC
+or `class_code`. The bank may return the same section in uppercase in the
+calendar and lowercase in the card. Matching permits only ASCII case differences;
+output retains both returned `exchange` and original `requested_exchange`.
+A unary result needs HTTP 200, explicit gRPC status 0, one valid
+body and matching RPC/stream identity. The next RPC starts after `poll` returns.
 
-The following is a proposed invocation, requiring separate run authorization:
+After closing the reference connection, the command opens two fresh market
+connections. Each requests both depth-50 order books and trades in one
+`MarketDataServerSideStream`: EXCHANGE (1) on one connection, ALL (3) on the other.
+One owner loop services both, recording separate ACK/data results for all four
+logical groups. Queue, ACK and first-data times distinguish setup from the common
+observation interval. Received sources remain observations: a dealer trade (2)
+under ALL is allowed, and missing/unknown sources never become the configured
+request by inference.
+
+`--schedule-days` selects 1–7 days (default 7), measured from a single UTC run
+start. Output preserves native logical dates and interval timestamps, renders
+UTC and Moscow time, and retains dealer/unknown interval types. A false
+`is_trading_day` does not erase dealer intervals. Calendar gaps and future
+calendar entries are not evidence of trading permission or future market data.
+
+Contract and semantics sources are the bank's official portal:
+
+- https://developer.tbank.ru/invest/services/quotes/marketdata
+- https://developer.tbank.ru/invest/services/instruments/methods
+- https://developer.tbank.ru/invest/intro/useful-info/weekend-trading/extended
+- https://developer.tbank.ru/invest/intro/developer/protocols/grpc
+
+The gRPC page links current protobuf contracts on the bank's own
+`opensource.tbank.ru/invest/invest-contracts` site. Do not substitute an SDK
+mirror or archived GitHub schema for these contracts.
+
+Build through the canonical root wrapper (p uses memory-bounded parallelism):
 
 ```sh
-# Outer timeout bounds the process if operating-system DNS cancellation stalls.
-timeout --kill-after=5s 125s exchange-api-probe research tbank-market-sources \
+CXET_BUILD_DIR=build/probes/tbank-market-sources ./tools/exchange_api_probe/compile.sh portable tbank p --memory-limit-gib 8
+```
+
+Example separately authorized live invocation for GAZP/TQBR:
+
+```sh
+# Bounds the process even if operating-system DNS cancellation stalls.
+timeout --kill-after=5s 125s build/probes/tbank-market-sources/tools/exchange_api_probe/exchange-api-probe research tbank-market-sources \
   --engines nghttp2 --env-file apps/hft-parser/.env \
   --ca-file server/certs/tbank-ca.pem --api-slot 1 \
-  --symbol e6123145-9665-43e0-8413-cd61b8aa9b13 \
-  --duration-seconds 20 --overall-timeout-seconds 120 --timeout-ms 5000 \
+  --symbol 962e2a95-02a9-4171-abd7-aa198dbe643a --schedule-days 7 \
+  --duration-seconds 60 --overall-timeout-seconds 120 --timeout-ms 5000 \
   --attempts 1 --max-artifact-bytes 4194304 \
   --output-dir results/tbank-market-sources --no-open
 ```
 
-Duration is at most 20 seconds per phase, with a 120-second overall budget and
-at most a 5000-ms connection/resolution deadline. DNS uses the existing bounded
-resolver; its platform cancellation behavior does not prove a strict internal
-wall-clock limit. An overall deadline that shortens a phase is inconclusive.
+The host is resolved once and the first numeric address is pinned, retaining the
+original hostname for TLS SNI/HTTP2 authority and requiring the explicit CA file.
+There are at most three TCP attempts and five RPCs, with at most two connections
+active together. Duration is 1–60 seconds (default 60), the overall budget is at
+most 120 seconds, and connect/unary/resolution deadlines are at most 5000 ms.
+There is no retry, reconnect, endpoint fallback, account, order or tariff RPC.
+A shortened observation interval or failed reference/transport stage is
+inconclusive. A rejected subscription does not stop the other logical groups.
 
 A new private run directory (0700) contains `public-frames.bin`,
-`public-frames.index.jsonl` and `events.jsonl` (0600). The binary file concatenates
-complete public Message protobuf bodies, excluding gRPC framing. The index
-records phase, byte offset, length and local monotonic time. Bodies are written
-inside the borrowed callback lifetime before semantic inspection, including ACK
-rejections and malformed bodies. Incomplete filesystem writes are rolled back.
-There is no recording of authorization metadata, HTTP headers, bearer tokens,
-environment contents, private bodies, grpc-message text, GOAWAY debug bytes,
-PCAP or TLS keys.
+`public-frames.index.jsonl` and `events.jsonl` (0600). Raw files retain sampled
+complete public request/response protobuf bodies without gRPC framing; the index
+attributes direction, RPC, connection/source, channel and stream ID. Responses
+are saved within the borrowed callback lifetime before payload semantics are
+decoded. Oversized bodies refused by transport before the callback are not saved.
+Readable observations include book levels/consistency and trade direction,
+quantity and timestamps. Quotations preserve signed `units`/`nano` exactly.
+Authorization metadata, HTTP headers, bearer tokens, environment contents,
+private bodies, grpc-message/GOAWAY debug text, PCAP and TLS keys are excluded.
 
-Capture is limited to 32 bodies and 384 KiB per phase, 64 KiB per body, and 4 MiB
-across all files including a reserved 64 KiB for summaries. After the sampling
-quota only bounded counters and source histograms continue. Artifact exhaustion,
-oversized input, malformed/schema-anomalous input or transport failure preserves
-available evidence with an inconclusive outcome. Summaries distinguish configured
-requests, queued requests and observed ACKs; an accepted ACK without data is
-`accepted_no_data`. Sources are reported as observed (1, 2, 3, absent, unknown),
-including values different from the configured request. ALL is never inferred
-from the request alone. The decoder checks bounded protobuf structure and selected
-UID/status/source/depth fields; it does not normalize prices, merge books, replay
-the production parser or establish fill/readiness guarantees. Production's source
-restriction to 1 is only a static fact and is unchanged by this diagnostic.
+Sampling is bounded to 32 bodies/384 KiB per logical market group and 64 KiB per
+body. All requests, reference responses, raw data, indexes and decoded JSON share
+4 MiB, with 64 KiB reserved for summaries. Sampling exhaustion keeps only bounded
+counters; artifact write failure is irreversible and stops the run. Filesystem
+write rollback prevents an index from claiming a partially written raw body.
+
+Exit 0 means the bounded observation completed, including a recognized rejection
+or `accepted_no_data`; exit 1 is inconclusive; exit 2 is invalid configuration or
+artifact preparation failure. Four accepted ACKs and usable real samples in every
+group are needed to substantiate a complete four-way comparison. No-data results
+finish the bounded observation without proving that channel's data format. The
+command does not merge books, replay the production parser, establish fill or
+trader readiness, or change production's EXCHANGE-only subscription policy.
+
+The same command accepts a futures UID. The 2026-11-05 GZZ6/SPBFUT observation
+used `--symbol 2e2d733d-ed60-4fca-82b8-e8bfab1ffe29`; its calendar section was
+`forts_futures_weekend` in the card and `FORTS_FUTURES_WEEKEND` in the response.
+
+ALL is a subscription selection, not an inferred label for subsequent data.
+In the 2026-11-05 GAZP and GZZ6 exchange-session observations, ALL ACKs returned
+source 3 while all received book/trade data reported EXCHANGE source 1. Retained
+messages from the two selections overlapped. Dealer data and any combined-book
+semantics still need observation during an actual dealer session; accepted ALL
+ACKs alone do not prove either.

@@ -161,7 +161,8 @@ class Nghttp2Connection final : public Connection {
                  std::span<const std::byte> request, bool streaming,
                  std::uint64_t deadline_ns) override {
     if (!connected_ || goaway_ || stream_ != 0 ||
-        !((path == kTradingStatusPath && !streaming) || (path == kMarketStreamPath && streaming) ||
+        !(((path == kTradingStatusPath || path == kInstrumentPath || path == kTradingSchedulesPath) && !streaming) ||
+          (path == kMarketStreamPath && streaming) ||
           (path == kUserTariffPath && !streaming && request.empty())) ||
         bearer.empty() || bearer.size() > kMaxFrame || request.size() > kMaxMessage || deadline_ns <= now_ns() ||
         bearer.find_first_of("\0\r\n", 0, 3) != std::string_view::npos)

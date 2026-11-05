@@ -1,5 +1,6 @@
 #include "exchange_probe/App.hpp"
 #include "exchange_probe/TbankGrpcDiagnostic.hpp"
+#include "../Research/TbankGrpcProtocol.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -139,7 +140,7 @@ CliParseResult parse_cli(int argc, char** argv) {
   }
   if (market_sources) {
     result.options.engines = "nghttp2";
-    result.options.duration_seconds = 20U;
+    result.options.duration_seconds = 60U;
     result.options.overall_timeout_seconds = 120U;
   }
   std::set<std::string_view> seen;
@@ -154,7 +155,7 @@ CliParseResult parse_cli(int argc, char** argv) {
           option == "--duration-seconds" || option == "--overall-timeout-seconds" ||
           option == "--timeout-ms" || option == "--attempts" ||
           option == "--max-artifact-bytes" || option == "--output-dir" ||
-          option == "--no-open");
+          option == "--no-open" || (market_sources && option == "--schedule-days"));
       if (!allowed || !seen.insert(option).second ||
           (option != "--no-open" &&
            (index + 1 >= argc || std::string_view{argv[index + 1]}.starts_with("--")))) {
@@ -163,7 +164,18 @@ CliParseResult parse_cli(int argc, char** argv) {
         return result;
       }
     }
-    if (option == "--engines" || option == "--api-slot" ||
+    if (option == "--schedule-days") {
+      if (!market_sources || !option_value(argc, argv, index, option, value, result.error)) {
+        if (result.error.empty()) result.error = "--schedule-days requires research tbank-market-sources";
+        return result;
+      }
+      const auto parsed = parse_unsigned(value);
+      if (!parsed || *parsed == 0U || *parsed > 7U) {
+        result.error = "--schedule-days must be between 1 and 7";
+        return result;
+      }
+      result.options.schedule_days = *parsed;
+    } else if (option == "--engines" || option == "--api-slot" ||
         option == "--overall-timeout-seconds") {
       if (!tbank) {
         result.error = "option requires research tbank-goaway";
@@ -416,8 +428,9 @@ CliParseResult parse_cli(int argc, char** argv) {
         result.options.ca_file->empty() || result.options.ca_file->native().size() > 4096U ||
         result.options.ca_file->native().find('\0') != std::string::npos || !result.options.output_dir ||
         result.options.output_dir->empty() ||
-        (!handoff && result.options.symbol != tbank_grpc::kSberUid) ||
-        (!handoff && (market_sources ? *result.options.duration_seconds > 20U : goaway ? *result.options.duration_seconds > 120U
+        (!handoff && (market_sources ? !tbank_grpc::valid_uid(result.options.symbol)
+                                    : result.options.symbol != tbank_grpc::kSberUid)) ||
+        (!handoff && (market_sources ? *result.options.duration_seconds > 60U : goaway ? *result.options.duration_seconds > 120U
                 : (*result.options.duration_seconds != 600U && *result.options.duration_seconds != 28800U))) ||
         result.options.limits.timeout > std::chrono::milliseconds{goaway ? 10000 : 5000} ||
         result.options.limits.attempts != 1U ||
@@ -609,7 +622,7 @@ void print_help(std::ostream& output) {
       << "  exchange-api-probe research run --venue NAME --product NAME "
          "[--channel ID...]\n"
       << "  exchange-api-probe research tbank-goaway --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH [--engines cxet,nghttp2] [--api-slot N] [--duration-seconds N] [--overall-timeout-seconds N] [--timeout-ms N] [--attempts 1] [--max-artifact-bytes N] [--no-open]\n"
-      << "  exchange-api-probe research tbank-market-sources --engines nghttp2 --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH [--duration-seconds 1..20] [--overall-timeout-seconds 1..120] [--timeout-ms 100..5000] [--attempts 1] [--max-artifact-bytes 65536..4194304] [--no-open]\n"
+      << "  exchange-api-probe research tbank-market-sources --engines nghttp2 --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH [--schedule-days 1..7] [--duration-seconds 1..60] [--overall-timeout-seconds 1..120] [--timeout-ms 100..5000] [--attempts 1] [--max-artifact-bytes 65536..4194304] [--no-open]\n"
       << "  exchange-api-probe research tbank-lifetime --env-file PATH --ca-file PATH --symbol UUID --output-dir PATH --duration-seconds 600|28800 [--api-slot N] [--timeout-ms 100..5000] [--attempts 1] [--max-artifact-bytes N]\n"
       << "  exchange-api-probe research tbank-ping-handoff --ca-file PATH --output-dir PATH [--timeout-ms 100..5000] [--max-artifact-bytes N] [--no-open]\n"
       << "  exchange-api-probe research analyze --input BUNDLE "

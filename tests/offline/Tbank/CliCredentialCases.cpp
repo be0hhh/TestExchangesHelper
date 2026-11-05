@@ -55,9 +55,22 @@ void marketSourcesSelection() {
       "e6123145-9665-43e0-8413-cd61b8aa9b13","--output-dir","out",flag,value});
   };
   const auto valid=args("--engines","nghttp2");
-  CXET_CHECK(valid.ok && *valid.options.duration_seconds==20 && valid.options.overall_timeout_seconds==120 && !valid.options.open_viewer);
+  CXET_CHECK(valid.ok && *valid.options.duration_seconds==60 && valid.options.schedule_days==7 &&
+             valid.options.overall_timeout_seconds==120 && !valid.options.open_viewer);
   CXET_CHECK(!args("--engines","cxet,nghttp2").ok);
-  CXET_CHECK(!args("--duration-seconds","21").ok);
+  CXET_CHECK(args("--duration-seconds","60").ok);
+  CXET_CHECK(!args("--duration-seconds","61").ok);
+  CXET_CHECK(args("--schedule-days","1").ok);
+  CXET_CHECK(args("--schedule-days","7").ok);
+  CXET_CHECK(!args("--schedule-days","0").ok);
+  CXET_CHECK(!args("--schedule-days","8").ok);
+  CXET_CHECK(!args("--symbol","962e2a95-02a9-4171-abd7-aa198dbe643a").ok); // Duplicate --symbol.
+  CXET_CHECK(cli({"research","tbank-market-sources","--env-file","absent","--ca-file","ca.pem",
+      "--symbol","962e2a95-02a9-4171-abd7-aa198dbe643a","--output-dir","out"}).ok);
+  CXET_CHECK(!cli({"research","tbank-market-sources","--env-file","absent","--ca-file","ca.pem",
+      "--symbol","not-a-uid","--output-dir","out"}).ok);
+  CXET_CHECK(!cli({"research","tbank-goaway","--env-file","absent","--ca-file","ca.pem",
+      "--symbol","e6123145-9665-43e0-8413-cd61b8aa9b13","--output-dir","out","--schedule-days","7"}).ok);
   CXET_CHECK(!args("--overall-timeout-seconds","121").ok);
   CXET_CHECK(!args("--timeout-ms","5001").ok);
   CXET_CHECK(!args("--attempts","2").ok);

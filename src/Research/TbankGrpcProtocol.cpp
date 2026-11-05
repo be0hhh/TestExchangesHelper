@@ -1,6 +1,10 @@
 #include "TbankGrpcProtocol.hpp"
 
 #include <cstdint>
+#include <bit>
+#include <chrono>
+#include <cstdio>
+#include <boost/json.hpp>
 #include <limits>
 
 namespace exchange_probe::tbank_grpc {
@@ -168,77 +172,142 @@ std::vector<std::byte> trading_status_request(std::string_view uid) {
   out.reserve(38u); byte(out, 0x0a); byte(out, 36u); text(out, uid);
   return out;
 }
-std::vector<std::byte> book_stream_request(std::string_view uid) {
-  if (!valid_uid(uid)) return {};
-  std::vector<std::byte> out;
-  out.reserve(48u);
-  byte(out, 0x12); byte(out, 46u); // envelope: book subscription
-  byte(out, 0x08); byte(out, 1u); // subscribe
-  byte(out, 0x12); byte(out, 42u); // one instrument
-  byte(out, 0x10); byte(out, 1u); // depth
-  byte(out, 0x1a); byte(out, 36u); text(out, uid);
-  byte(out, 0x20); byte(out, 1u); // EXCHANGE
-  return out;
-}
-std::vector<std::byte> market_source_request(MarketKind kind, unsigned source) {
-  if (source != 1u && source != 3u) return {};
-  if (kind == MarketKind::Book) {
-    auto out = book_stream_request(kSberUid);
-    out[7] = std::byte{50}; out.back() = static_cast<std::byte>(source);
-    return out;
-  }
-  std::vector<std::byte> out;
-  byte(out, 0x1a); byte(out, 44); byte(out, 8); byte(out, 1);
-  byte(out, 0x12); byte(out, 38); byte(out, 0x12); byte(out, 36); text(out, kSberUid);
-  byte(out, 0x18); byte(out, source);
-  return out;
-}
 namespace {
-// Validate known nested messages without interpreting financial values.
-MarketDecode nested_syntax(Bytes bytes, unsigned mode) noexcept {
-  Cursor c{bytes}; std::uint64_t seen = 0;
-  while (c.pos < bytes.size()) {
-    Field f; if (!c.next(f)) return MarketDecode::MalformedSyntax;
+void varint(std::vector<std::byte>& out, std::uint64_t value) {
+  do { byte(out, static_cast<unsigned>(value & 127u) | (value > 127u ? 128u : 0u)); value >>= 7u; } while (value);
+}
+void scalar(std::vector<std::byte>& out, unsigned tag, std::uint64_t value) {
+  varint(out, tag * 8u); varint(out, value);
+}
+void nested(std::vector<std::byte>& out, unsigned tag, Bytes value) {
+  varint(out, tag * 8u + 2u); varint(out, value.size()); out.insert(out.end(), value.begin(), value.end());
+}
+void string_field(std::vector<std::byte>& out, unsigned tag, std::string_view value) {
+  nested(out, tag, {reinterpret_cast<const std::byte*>(value.data()), value.size()});
+}
+std::vector<std::byte> book_subscription(std::string_view uid, unsigned source, unsigned depth) {
+  std::vector<std::byte> instrument, subscription;
+  scalar(instrument, 2, depth); string_field(instrument, 3, uid); scalar(instrument, 4, source);
+  scalar(subscription, 1, 1); nested(subscription, 2, instrument);
+  return subscription;
+}
+// Preserve the signed protobuf value without a floating point conversion.
+std::int64_t signed64(std::uint64_t value) noexcept { return std::bit_cast<std::int64_t>(value); }
+bool signed32(std::uint64_t value, std::int32_t& output) noexcept {
+  if (value > 2147483647ull && value < 18446744071562067968ull) return false;
+  output = std::bit_cast<std::int32_t>(static_cast<std::uint32_t>(value)); return true;
+}
+MarketDecode quotation(Bytes body, boost::json::object* output) {
+  Cursor cursor{body}; unsigned seen{}; std::int64_t units{}; std::int32_t nano{};
+  while (cursor.pos < body.size()) {
+    Field f; if (!cursor.next(f)) return MarketDecode::MalformedSyntax;
     if (f.number > 2u) continue;
-    const auto bit = 1ull << f.number;
+    const auto bit = 1u << f.number;
+    if ((seen & bit) || f.wire != 0u) return MarketDecode::SchemaAnomaly;
+    seen |= bit;
+    if (f.number == 1u) units = signed64(f.value);
+    else if (!signed32(f.value, nano)) return MarketDecode::SchemaAnomaly;
+  }
+  if (output) *output = {{"units", units}, {"nano", nano}};
+  return MarketDecode::Other;
+}
+std::string render_timestamp(std::int64_t seconds, std::int32_t nanos, bool msk) {
+  using namespace std::chrono;
+  const sys_seconds instant{std::chrono::seconds{seconds + (msk ? 10800 : 0)}};
+  const auto day = floor<days>(instant);
+  const year_month_day date{day}; const hh_mm_ss time{instant - day};
+  char result[64];
+  std::snprintf(result, sizeof(result), "%04d-%02u-%02uT%02lld:%02lld:%02lld.%09d%s",
+      static_cast<int>(date.year()), static_cast<unsigned>(date.month()), static_cast<unsigned>(date.day()),
+      static_cast<long long>(time.hours().count()), static_cast<long long>(time.minutes().count()),
+      static_cast<long long>(time.seconds().count()), nanos, msk ? "+03:00" : "Z");
+  return result;
+}
+MarketDecode timestamp(Bytes body, boost::json::object* output) {
+  Cursor cursor{body}; unsigned seen{}; std::int64_t seconds{}; std::int32_t nanos{};
+  while (cursor.pos < body.size()) {
+    Field f; if (!cursor.next(f)) return MarketDecode::MalformedSyntax;
+    if (f.number > 2u) continue;
+    const auto bit = 1u << f.number;
+    if ((seen & bit) || f.wire != 0u) return MarketDecode::SchemaAnomaly;
+    seen |= bit;
+    if (f.number == 1u) seconds = signed64(f.value);
+    else if (!signed32(f.value, nanos)) return MarketDecode::SchemaAnomaly;
+  }
+  if (seconds < -62135596800ll || seconds > 253402300799ll || nanos < 0 || nanos >= 1000000000) return MarketDecode::SchemaAnomaly;
+  if (output) *output = {{"seconds", seconds}, {"nanos", nanos},
+      {"utc", render_timestamp(seconds, nanos, false)}, {"msk", render_timestamp(seconds, nanos, true)}};
+  return MarketDecode::Other;
+}
+MarketDecode order(Bytes body, boost::json::object* output) {
+  Cursor cursor{body}; unsigned seen{}; boost::json::object price; std::int64_t quantity{};
+  while (cursor.pos < body.size()) {
+    Field f; if (!cursor.next(f)) return MarketDecode::MalformedSyntax;
+    if (f.number > 2u) continue;
+    const auto bit = 1u << f.number;
     if (seen & bit) return MarketDecode::SchemaAnomaly;
     seen |= bit;
-    if ((mode == 1u && f.number == 1u) ? f.wire != 2u : f.wire != 0u)
-      return MarketDecode::SchemaAnomaly;
-    if (mode == 1u && f.number == 1u) {
-      auto result = nested_syntax(f.bytes, 0u);
+    if (f.number == 1u) {
+      if (f.wire != 2u) return MarketDecode::SchemaAnomaly;
+      const auto result = quotation(f.bytes, output ? &price : nullptr);
       if (result != MarketDecode::Other) return result;
+    } else {
+      if (f.wire != 0u) return MarketDecode::SchemaAnomaly;
+      quantity = signed64(f.value);
     }
+  }
+  if (output) {
+    // Proto3 defaults are values; presence is retained separately for diagnostics.
+    if (!(seen & 2u)) price = {{"units", 0}, {"nano", 0}};
+    *output = {{"price", std::move(price)}, {"quantity", quantity},
+        {"price_present", bool(seen & 2u)}, {"quantity_present", bool(seen & 4u)}};
   }
   return MarketDecode::Other;
 }
 }
-MarketObservation inspect_market_source(Bytes body, MarketKind kind) noexcept {
-  MarketObservation o;
-  auto fail = [&](MarketDecode result) { o.result = result; return o; };
-  if (body.size() > kMaxBody) return fail(MarketDecode::SchemaAnomaly);
-  Cursor c{body}; Bytes payload; std::uint64_t selected = 0;
-  while (c.pos < body.size()) {
-    Field f; if (!c.next(f)) return fail(MarketDecode::MalformedSyntax);
+std::vector<std::byte> book_stream_request(std::string_view uid) {
+  if (!valid_uid(uid)) return {};
+  std::vector<std::byte> out; nested(out, 2, book_subscription(uid, 1, 1)); return out;
+}
+std::vector<std::byte> combined_market_request(std::string_view uid, unsigned source) {
+  if (!valid_uid(uid) || (source != 1u && source != 3u)) return {};
+  std::vector<std::byte> out, instrument, trades;
+  nested(out, 2, book_subscription(uid, source, 50));
+  string_field(instrument, 2, uid); scalar(trades, 1, 1); nested(trades, 2, instrument); scalar(trades, 3, source);
+  nested(out, 3, trades); return out;
+}
+MarketEnvelope market_envelope(Bytes body) noexcept {
+  MarketEnvelope envelope;
+  if (body.size() > kMaxBody) { envelope.result = MarketDecode::SchemaAnomaly; return envelope; }
+  Cursor cursor{body}; std::uint64_t selected{};
+  while (cursor.pos < body.size()) {
+    Field f;
+    if (!cursor.next(f)) { envelope.result = MarketDecode::MalformedSyntax; return envelope; }
     if (f.number > 12u) continue;
-    if (selected || f.wire != 2u) return fail(MarketDecode::SchemaAnomaly);
-    selected = f.number; payload = f.bytes;
+    if (selected || f.wire != 2u) { envelope.result = MarketDecode::SchemaAnomaly; return envelope; }
+    selected = f.number; envelope.payload = f.bytes;
   }
-  if (!selected) return fail(MarketDecode::SchemaAnomaly);
-  const bool book = kind == MarketKind::Book;
-  const bool ack = selected == (book ? 2u : 3u);
-  const bool data = selected == (book ? 7u : 6u);
-  if (!ack && !data) return o;
+  if (!selected) { envelope.result = MarketDecode::SchemaAnomaly; return envelope; }
+  if (selected == 2u || selected == 7u) envelope.kind = MarketKind::Book;
+  else if (selected == 3u || selected == 6u) envelope.kind = MarketKind::Trades;
+  if (selected == 2u || selected == 3u) envelope.result = MarketDecode::Ack;
+  else if (selected == 6u || selected == 7u) envelope.result = MarketDecode::Data;
+  return envelope;
+}
+MarketObservation inspect_market_source(const MarketEnvelope& envelope, bool include_details) {
+  MarketObservation o; o.kind = envelope.kind; o.result = envelope.result;
+  auto fail = [&](MarketDecode result) { o.result = result; o.details.clear(); return o; };
+  if (o.result != MarketDecode::Ack && o.result != MarketDecode::Data) return o;
+  const bool ack = o.result == MarketDecode::Ack, book = o.kind == MarketKind::Book;
   auto parse_row = [&](Bytes row) -> MarketDecode {
-    Cursor r{row}; std::uint64_t seen = 0;
+    Cursor r{row}; std::uint64_t seen{}; boost::json::array bids, asks;
     while (r.pos < row.size()) {
       Field f; if (!r.next(f)) return MarketDecode::MalformedSyntax;
       const auto uid_tag = ack ? (book ? 4u : 3u) : (book ? 9u : 6u);
       const auto source_tag = ack ? (book ? 7u : 0u) : (book ? 10u : 7u);
       const auto status_tag = book ? 3u : 2u;
       const bool repeated = !ack && book && (f.number == 4u || f.number == 5u);
-      const bool known = f.number <= (ack ? (book ? 7u : 3u) : (book ? 10u : 7u));
-      if (!known) continue;
+      if (f.number > (ack ? (book ? 7u : 3u) : (book ? 10u : 7u))) continue;
       if (!repeated) {
         const auto bit = 1ull << f.number;
         if (seen & bit) return MarketDecode::SchemaAnomaly;
@@ -246,7 +315,7 @@ MarketObservation inspect_market_source(Bytes body, MarketKind kind) noexcept {
       }
       if (f.number == uid_tag) {
         if (f.wire != 2u) return MarketDecode::SchemaAnomaly;
-        o.uid = {reinterpret_cast<const char*>(f.bytes.data()), f.bytes.size()};
+        o.uid = method_name(f.bytes);
         if (!valid_uid(o.uid)) return MarketDecode::SchemaAnomaly;
       } else if (f.number == source_tag) {
         if (f.wire != 0u) return MarketDecode::SchemaAnomaly;
@@ -257,35 +326,74 @@ MarketObservation inspect_market_source(Bytes body, MarketKind kind) noexcept {
       } else if (book && f.number == 2u) {
         if (f.wire != 0u) return MarketDecode::SchemaAnomaly;
         o.depth = f.value; o.depth_present = true;
-      } else if (!ack && (repeated || f.number == (book ? 6u : 5u) || (!book && f.number == 3u))) {
+      } else if (!ack && repeated) {
         if (f.wire != 2u) return MarketDecode::SchemaAnomaly;
-        auto result = nested_syntax(f.bytes, repeated ? 1u : 0u);
+        boost::json::object item;
+        const auto result = order(f.bytes, include_details ? &item : nullptr);
         if (result != MarketDecode::Other) return result;
+        if (include_details) (f.number == 4u ? bids : asks).push_back(std::move(item));
+      } else if (!ack && (f.number == (book ? 6u : 5u) || (!book && f.number == 3u))) {
+        if (f.wire != 2u) return MarketDecode::SchemaAnomaly;
+        boost::json::object value;
+        const auto result = f.number == 3u ? quotation(f.bytes, include_details ? &value : nullptr) :
+            timestamp(f.bytes, include_details ? &value : nullptr);
+        if (result != MarketDecode::Other) return result;
+        if (include_details) o.details[f.number == 3u ? "price" : "time"] = std::move(value);
       } else if (!ack && ((!book && (f.number == 2u || f.number == 4u)) || (book && f.number == 3u))) {
-        if (f.wire != 0u) return MarketDecode::SchemaAnomaly;
+        if (f.wire != 0u || (book && f.value > 1u)) return MarketDecode::SchemaAnomaly;
+        if (include_details) {
+          if (book) o.details["is_consistent"] = bool(f.value);
+          else o.details[f.number == 2u ? "direction" : "quantity"] = signed64(f.value);
+        }
       }
     }
-    if (!ack && book && (!(seen & (1ull<<2u)) || !(seen & (1ull<<6u)))) return MarketDecode::SchemaAnomaly;
-    if (!ack && !book && ((seen & 0x3cull) != 0x3cull)) return MarketDecode::SchemaAnomaly;
-    if (ack && !o.status_present) return MarketDecode::SchemaAnomaly;
+    if (!ack && book && (!(seen & (1ull << 2u)) || !(seen & (1ull << 6u)))) return MarketDecode::SchemaAnomaly;
+    // Message price/time remain required; omitted proto3 direction/quantity
+    // and ACK status retain their zero defaults independently of presence.
+    if (!ack && !book && (!(seen & (1ull << 3u)) || !(seen & (1ull << 5u)))) return MarketDecode::SchemaAnomaly;
     if ((!ack || o.status == 1u) && o.uid.empty()) return MarketDecode::SchemaAnomaly;
+    if (include_details && !ack && book) {
+      o.details["bids"] = std::move(bids); o.details["asks"] = std::move(asks);
+      o.details["consistency_present"] = bool(seen & (1ull << 3u));
+      if (!(seen & (1ull << 3u))) o.details["is_consistent"] = false;
+    }
+    if (include_details && !ack && !book) {
+      o.details["direction_present"] = bool(seen & (1ull << 2u));
+      o.details["quantity_present"] = bool(seen & (1ull << 4u));
+      if (!(seen & (1ull << 2u))) o.details["direction"] = std::int64_t{0};
+      if (!(seen & (1ull << 4u))) o.details["quantity"] = std::int64_t{0};
+    }
     return ack ? MarketDecode::Ack : MarketDecode::Data;
   };
-  if (data) { o.result = parse_row(payload); return o; }
-  Cursor a{payload}; bool row_seen = false, root_source_seen = false;
-  while (a.pos < payload.size()) {
-    Field f; if (!a.next(f)) return fail(MarketDecode::MalformedSyntax);
-    if (f.number == 2u) {
-      if (row_seen || f.wire != 2u) return fail(MarketDecode::SchemaAnomaly);
-      row_seen = true;
-      auto result = parse_row(f.bytes);
-      if (result != MarketDecode::Ack) return fail(result);
-    } else if (!book && f.number == 3u) {
-      if (root_source_seen || f.wire != 0u) return fail(MarketDecode::SchemaAnomaly);
-      root_source_seen = true; o.source_present = true; o.source = f.value;
+  if (!ack) {
+    const auto result = parse_row(envelope.payload);
+    if (result != MarketDecode::Data) return fail(result);
+  } else {
+    Cursor a{envelope.payload}; bool row_seen = false, root_source_seen = false;
+    while (a.pos < a.input.size()) {
+      Field f; if (!a.next(f)) return fail(MarketDecode::MalformedSyntax);
+      if (f.number == 2u) {
+        if (row_seen || f.wire != 2u) return fail(MarketDecode::SchemaAnomaly);
+        row_seen = true;
+        const auto result = parse_row(f.bytes);
+        if (result != MarketDecode::Ack) return fail(result);
+      } else if (!book && f.number == 3u) {
+        if (root_source_seen || f.wire != 0u) return fail(MarketDecode::SchemaAnomaly);
+        root_source_seen = true; o.source_present = true; o.source = f.value;
+      }
+    }
+    if (!row_seen) return fail(MarketDecode::SchemaAnomaly);
+  }
+  if (include_details) {
+    o.details["source_present"] = o.source_present;
+    if (o.source_present) o.details["source"] = o.source;
+    if (o.depth_present) o.details["depth"] = o.depth;
+    if (ack) {
+      o.details["status"] = o.status;
+      o.details["status_present"] = o.status_present;
     }
   }
-  return fail(row_seen ? MarketDecode::Ack : MarketDecode::SchemaAnomaly);
+  return o;
 }
 AckResult inspect_book_ack(Bytes body, std::string_view expected_uid) noexcept {
   if (body.size() > kMaxBody || !valid_uid(expected_uid)) return AckResult::Malformed;
@@ -337,34 +445,7 @@ bool tariff_covers_experiment(const TariffSummary& summary) noexcept {
   }
   return status && tariff;
 }
-bool inspect_trading_status(Bytes body) noexcept {
-  if (body.empty() || body.size() > kMaxBody) return false;
-  Cursor top{body}; bool row_seen = false;
-  while (top.pos < body.size()) {
-    Field f; if (!top.next(f)) return false;
-    if (f.number != 1u) continue;
-    if (row_seen || f.wire != 2u) return false;
-    row_seen = true;
-    Cursor row{f.bytes}; bool uid_seen = false, status_seen = false;
-    std::array<bool, 3> flag_seen{};
-    while (row.pos < row.input.size()) {
-      Field item; if (!row.next(item)) return false;
-      if (item.number == 6u) {
-        if (uid_seen || item.wire != 2u || method_name(item.bytes) != kSberUid) return false;
-        uid_seen = true;
-      } else if (item.number == 2u) {
-        if (status_seen || item.wire != 0u || item.value > 2147483647u) return false;
-        status_seen = true;
-      } else if (item.number >= 3u && item.number <= 5u) {
-        auto& seen = flag_seen[static_cast<std::size_t>(item.number - 3u)];
-        if (seen || item.wire != 0u || item.value > 1u) return false;
-        seen = true;
-      }
-    }
-    if (!uid_seen) return false;
-  }
-  return row_seen;
-}
+#include "TbankGrpcReference.ipp"
 std::uint64_t next_lifetime_slot(std::uint64_t first, std::uint64_t now) noexcept {
   constexpr std::uint64_t period = 20'000'000'000ull;
   if (now < first) return first;

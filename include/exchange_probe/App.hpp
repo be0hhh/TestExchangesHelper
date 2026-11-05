@@ -63,6 +63,7 @@ struct CliOptions {
   std::string engines{"cxet,nghttp2"};
   unsigned api_slot{1U};
   unsigned overall_timeout_seconds{300U};
+  unsigned schedule_days{7U};
   std::vector<std::string> channels;
   std::optional<std::string> standard_channel;
   std::optional<std::string> aws_channel;

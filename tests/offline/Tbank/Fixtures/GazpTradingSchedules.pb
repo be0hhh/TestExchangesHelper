@@ -1,0 +1,163 @@
+
+ 
+MOEX_MRNG_EVNG_E_WKND_DLRŠ
+€¯×Àş¯×"÷×³×:èù¯×BâÏ²×‚ÔÍ²×Š¿ş¯×’+
+opening_auction_morning
+èù¯×¿ş¯×’#
+opening_auction
+èù¯×¿ş¯×’3
+regular_trading_session_morning
+Àş¯×ß¶°×’+
+regular_trading_session
+Àş¯×ß¶°×’0
+regular_trading_session_main
+à¶°×ÓÍ²×’+
+regular_trading_session
+à¶°×ÓÍ²×’(
+closing_auction_main
+ÔÍ²×âÏ²×’#
+closing_auction
+ÔÍ²×âÏ²×’3
+regular_trading_session_evening
+Ğ²×÷×³×’+
+regular_trading_session
+Ğ²×÷×³×Š
+€±´×À¡µ×"÷ú¸×:èœµ×Bâò·×‚Ôğ·×Š¿¡µ×’+
+opening_auction_morning
+èœµ×¿¡µ×’#
+opening_auction
+èœµ×¿¡µ×’3
+regular_trading_session_morning
+À¡µ×ßÙµ×’+
+regular_trading_session
+À¡µ×ßÙµ×’0
+regular_trading_session_main
+àÙµ×Óğ·×’+
+regular_trading_session
+àÙµ×Óğ·×’(
+closing_auction_main
+Ôğ·×âò·×’#
+closing_auction
+Ôğ·×âò·×’3
+regular_trading_session_evening
+ó·×÷ú¸×’+
+regular_trading_session
+ó·×÷ú¸×Ï
+€Ô¹×ğ·¹×"÷¾×:˜”»×Šï˜»×’:
+&dealer_holiday_trading_session_morning
+ğ·¹×À»×’2
+dealer_regular_trading_session
+ğ·¹×À»×’3
+holiday_opening_auction_morning
+˜”»×ï˜»×’#
+opening_auction
+˜”»×ï˜»×’3
+holiday_trading_session_morning
+ğ˜»×€–½×’+
+regular_trading_session
+ğ˜»×€–½×’:
+&dealer_holiday_trading_session_evening
+–½×÷¾×’2
+dealer_regular_trading_session
+–½×÷¾×Ï
+€÷¾×ğÚ¾×"÷ÀÃ×:˜·À×Šï»À×’:
+&dealer_holiday_trading_session_morning
+ğÚ¾×À²À×’2
+dealer_regular_trading_session
+ğÚ¾×À²À×’3
+holiday_opening_auction_morning
+˜·À×ï»À×’#
+opening_auction
+˜·À×ï»À×’3
+holiday_trading_session_morning
+ğ»À×€¹Â×’+
+regular_trading_session
+ğ»À×€¹Â×’:
+&dealer_holiday_trading_session_evening
+¹Â×÷ÀÃ×’2
+dealer_regular_trading_session
+¹Â×÷ÀÃ×Š
+€šÄ×ÀŠÅ×"÷ãÈ×:è…Å×BâÛÇ×‚ÔÙÇ×Š¿ŠÅ×’+
+opening_auction_morning
+è…Å×¿ŠÅ×’#
+opening_auction
+è…Å×¿ŠÅ×’3
+regular_trading_session_morning
+ÀŠÅ×ßÂÅ×’+
+regular_trading_session
+ÀŠÅ×ßÂÅ×’0
+regular_trading_session_main
+àÂÅ×ÓÙÇ×’+
+regular_trading_session
+àÂÅ×ÓÙÇ×’(
+closing_auction_main
+ÔÙÇ×âÛÇ×’#
+closing_auction
+ÔÙÇ×âÛÇ×’3
+regular_trading_session_evening
+ÜÇ×÷ãÈ×’+
+regular_trading_session
+ÜÇ×÷ãÈ×Š
+€½É×À­Ê×"÷†Î×:è¨Ê×BâşÌ×‚ÔüÌ×Š¿­Ê×’+
+opening_auction_morning
+è¨Ê×¿­Ê×’#
+opening_auction
+è¨Ê×¿­Ê×’3
+regular_trading_session_morning
+À­Ê×ßåÊ×’+
+regular_trading_session
+À­Ê×ßåÊ×’0
+regular_trading_session_main
+àåÊ×ÓüÌ×’+
+regular_trading_session
+àåÊ×ÓüÌ×’(
+closing_auction_main
+ÔüÌ×âşÌ×’#
+closing_auction
+ÔüÌ×âşÌ×’3
+regular_trading_session_evening
+ÿÌ×÷†Î×’+
+regular_trading_session
+ÿÌ×÷†Î×Š
+€àÎ×ÀĞÏ×"÷©Ó×:èËÏ×Bâ¡Ò×‚ÔŸÒ×Š¿ĞÏ×’+
+opening_auction_morning
+èËÏ×¿ĞÏ×’#
+opening_auction
+èËÏ×¿ĞÏ×’3
+regular_trading_session_morning
+ÀĞÏ×ßˆĞ×’+
+regular_trading_session
+ÀĞÏ×ßˆĞ×’0
+regular_trading_session_main
+àˆĞ×ÓŸÒ×’+
+regular_trading_session
+àˆĞ×ÓŸÒ×’(
+closing_auction_main
+ÔŸÒ×â¡Ò×’#
+closing_auction
+ÔŸÒ×â¡Ò×’3
+regular_trading_session_evening
+¢Ò×÷©Ó×’+
+regular_trading_session
+¢Ò×÷©Ó×Š
+€ƒÔ×ÀóÔ×"÷ÌØ×:èîÔ×BâÄ××‚ÔÂ××Š¿óÔ×’+
+opening_auction_morning
+èîÔ×¿óÔ×’#
+opening_auction
+èîÔ×¿óÔ×’3
+regular_trading_session_morning
+ÀóÔ×ß«Õ×’+
+regular_trading_session
+ÀóÔ×ß«Õ×’0
+regular_trading_session_main
+à«Õ×ÓÂ××’+
+regular_trading_session
+à«Õ×ÓÂ××’(
+closing_auction_main
+ÔÂ××âÄ××’#
+closing_auction
+ÔÂ××âÄ××’3
+regular_trading_session_evening
+Å××÷ÌØ×’+
+regular_trading_session
+Å××÷ÌØ×
