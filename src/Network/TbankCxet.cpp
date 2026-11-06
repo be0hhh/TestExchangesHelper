@@ -1,6 +1,6 @@
 #include "exchange_probe/TbankGrpcDiagnostic.hpp"
 
-#include "cxet/Network/Common/SecureWipe.hpp"
+#include "cxet/Primitives/Buf/SecureWipe.hpp"
 #include "cxet/Network/Grpc/GrpcClient.hpp"
 
 #include <algorithm>
@@ -120,7 +120,7 @@ class CxetConnection final : public Connection {
         request.size() > kMessageBytes || !client_.canOpenRequestStream())
       return 0u;
     std::array<char, kAuthorizationBytes> authorization{};
-    cxet::network::common::SecureWipe wipe(authorization);
+    ::cxet::bytescan::SecureWipe wipe(authorization);
     constexpr std::string_view prefix = "Bearer ";
     std::memcpy(authorization.data(), prefix.data(), prefix.size());
     std::memcpy(authorization.data() + prefix.size(), bearer.data(), bearer.size());
