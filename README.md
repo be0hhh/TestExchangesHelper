@@ -372,3 +372,54 @@ source 3 while all received book/trade data reported EXCHANGE source 1. Retained
 messages from the two selections overlapped. Dealer data and any combined-book
 semantics still need observation during an actual dealer session; accepted ALL
 ACKs alone do not prove either.
+
+### Bounded native reference HTTP frequency diagnostic
+
+`research reference-http-frequency` uses a separate instance of Parser COMMON
+`QuoteSource`, with the registered MOCK (source 22) request builder and parser.
+It supports the exact `ANTHROPIC` reference symbol. A real provider, including
+Nasdaq, requires a separately selected connector; this command does not create
+one. The standalone tool refuses this command when the root Parser target is
+unavailable.
+
+Example for a future explicitly selected network run (not a build/test command):
+
+```sh
+exchange-api-probe research reference-http-frequency \
+  --endpoint-env MOCK_REFERENCE_URL --token-env MOCK_REFERENCE_TOKEN \
+  --ca-file /path/to/trusted-ca.pem --symbol ANTHROPIC \
+  --output-dir /path/to/owned-results --no-open
+```
+
+Set the two named environment values through the existing secret provisioning
+flow. The command reads only those selected values and never emits their names,
+values, request headers, response bodies or environment dumps. TLS trust is
+explicit, with no insecure fallback. It creates a private run directory and a
+mode-0600 `events.jsonl` under the selected output root; it never opens a browser.
+
+The default ladder is 1000, 500, 250, 100 and 50 ms, each for 60 seconds. Bounds
+are one symbol, one connection, one request in flight, 330 seconds overall,
+2230 request attempts and 4 MiB of artifacts including reserved summary space.
+`--periods-ms` selects at most five strictly decreasing periods within 50–1000 ms;
+`--duration-seconds` lowers each stage to 1–60 seconds. The request ceiling is
+recomputed as the sum of `ceil(stage_ms / period_ms) + 2` for each selected stage;
+`--max-requests` can only lower it. `--overall-timeout-seconds` can only lower the
+330-second deadline, `--timeout-ms` is 100–5000 ms, and
+`--max-artifact-bytes` is 65536–4194304. Unsupported concurrency, provider,
+retry, raw capture and browser flags are refused. Requests are scheduled by the
+native source after completion, with no catch-up bursts. Period changes preserve
+the session; actual connection attempts remain visible in the report.
+
+A rejected HTTP status (including 401, 403 and 429), invalid native quote,
+transport failure or exhausted resource bound stops the ladder before another
+request. There is no quota-bypass retry. Reports separate nominal request rate,
+achieved rate, matching confirmations and distinct sample updates, and include
+full-response latency p50/p95/p99. The send timestamp marks native request
+transfer initiation, not a measured wire timestamp. Source age stays unknown
+without a proved clock mapping. Reports project Retry-After and cache Age as
+bounded numeric seconds when valid, plus header presence. HTTP-date Retry-After
+and duplicate or invalid numeric values stay unknown; raw header values are
+never retained. Cache-Control presence is recorded. A request interrupted at
+the final boundary remains an incomplete tail. An interrupted or
+failed range is incomplete; a completed range only describes the observations
+and never establishes a provider's maximum allowed request rate.

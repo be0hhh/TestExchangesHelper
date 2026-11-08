@@ -1,5 +1,7 @@
 cxet_add_offline_suite(exchange_probe_offline_cases OWNER TestExchangesHelper EXPECTED 14
   SOURCES Contracts/ProbeCases.cpp LIBRARIES exchange_probe_lib LABELS contracts)
+cxet_add_offline_suite(exchange_probe_reference_http_cases OWNER TestExchangesHelper EXPECTED 4
+  SOURCES Reference/HttpFrequencyCases.cpp LIBRARIES exchange_probe_lib LABELS contracts reference)
 cxet_add_offline_suite(exchange_probe_paired_cli_cases OWNER TestExchangesHelper EXPECTED 2
   SOURCES Paired/PairedCliCases.cpp LIBRARIES exchange_probe_lib LABELS contracts cli)
 cxet_add_offline_suite(exchange_probe_paired_receipt_cases OWNER TestExchangesHelper EXPECTED 16

@@ -3,6 +3,7 @@
 #include "exchange_probe/Credentials.hpp"
 #include "exchange_probe/Model.hpp"
 #include "exchange_probe/ResearchProfile.hpp"
+#include "exchange_probe/ReferenceHttpFrequency.hpp"
 
 #include <filesystem>
 #include <iosfwd>
@@ -38,6 +39,7 @@ enum class RouteMode {
 };
 
 struct CliOptions {
+  ReferenceHttpFrequencyOptions reference_http_frequency;
   Command command{Command::Help};
   std::vector<std::string> venues;
   std::vector<std::string> products;

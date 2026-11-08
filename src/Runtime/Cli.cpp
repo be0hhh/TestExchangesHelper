@@ -64,6 +64,10 @@ inline constexpr std::uint64_t kMaxArtifactBytes =
 }  // namespace
 
 CliParseResult parse_cli(int argc, char** argv) {
+  if (argc > 2 && std::string_view{argv[1]} == "research" &&
+      std::string_view{argv[2]} == "reference-http-frequency") {
+    return parse_reference_http_frequency_cli(argc, argv);
+  }
   CliParseResult result;
   int option_start = 2;
   if (argc < 2) {
@@ -627,6 +631,7 @@ void print_help(std::ostream& output) {
       << "  exchange-api-probe research tbank-ping-handoff --ca-file PATH --output-dir PATH [--timeout-ms 100..5000] [--max-artifact-bytes N] [--no-open]\n"
       << "  exchange-api-probe research analyze --input BUNDLE "
          "[--standard-channel ID --aws-channel ID]\n"
+      << "  exchange-api-probe research reference-http-frequency --endpoint-env NAME --token-env NAME --ca-file PATH --output-dir PATH [--symbol ANTHROPIC] [--periods-ms 1000,500,250,100,50] [--duration-seconds 1..60] [--overall-timeout-seconds 1..330] [--max-requests N] [--timeout-ms 100..5000] [--max-artifact-bytes 65536..4194304] [--no-open]\n"
       << "  exchange-api-probe serve [--input BUNDLE|RESULTS_ROOT]\n"
       << "Probe/capture options:\n"
       << "      [--surface public|private] [--transport rest|ws|fix]\n"
@@ -644,7 +649,8 @@ void print_help(std::ostream& output) {
          "[--channel ID] [--rounds N] [--no-open] [--pcap]\n"
       << "          [--allow-adapter] [--allow-private-adapter]\n"
       << "\nPrivate REST is read-only and requires --confirm-private. Public\n"
-      << "commands never load credentials.\n";
+      << "probe commands never load credentials. The native reference diagnostic\n"
+      << "reads only its explicitly selected endpoint/token environment values.\n";
 }
 
 std::vector<const ProductSpec*> select_products(

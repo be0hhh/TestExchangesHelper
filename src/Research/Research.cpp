@@ -1,5 +1,6 @@
 #include "exchange_probe/Research.hpp"
 #include "exchange_probe/Net.hpp"
+#include "exchange_probe/ReferenceHttpFrequency.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -26,6 +27,9 @@ int run_research(
     const CliOptions& options,
     std::ostream& output,
     std::ostream& error_output) {
+  if (options.action == "reference-http-frequency") {
+    return run_reference_http_frequency(options, output, error_output);
+  }
   if (options.action == "analyze") {
     if (options.inputs.size() != 1U) {
       error_output

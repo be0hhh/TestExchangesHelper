@@ -46,6 +46,7 @@ add_library(exchange_probe_lib STATIC
     src/Research/ResearchCapture.cpp
     src/Research/ResearchRestCapture.cpp
     src/Research/ResearchCommands.cpp
+    src/Research/ReferenceHttpFrequency.cpp
     src/Research/TbankGrpcLifecycle.cpp
     src/Research/TbankMarketSources.cpp
     src/Research/TbankGrpcProtocol.cpp
@@ -68,6 +69,10 @@ target_link_libraries(exchange_probe_lib
         PkgConfig::NGHTTP2
         Threads::Threads
 )
+if(TARGET hft_parser::reference_quote_runtime)
+    target_compile_definitions(exchange_probe_lib PRIVATE EXCHANGE_PROBE_WITH_REFERENCE=1)
+    target_link_libraries(exchange_probe_lib PRIVATE hft_parser::reference_quote_runtime)
+endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(exchange_probe_lib PRIVATE
